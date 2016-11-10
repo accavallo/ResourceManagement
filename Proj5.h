@@ -24,4 +24,11 @@
 #include <sys/types.h>
 #include <errno.h>
 
+#define KEY 18137644
+
+int memory;
+
+/* Function prototypes */
+void detachMemory();
+
 #endif /* Proj5_h */
