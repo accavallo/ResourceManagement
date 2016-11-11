@@ -24,11 +24,26 @@
 #include <sys/types.h>
 #include <errno.h>
 
-#define KEY 18137644
+#define MEMORY_KEY 18137644
 
-int memory;
+/* Global variables for all */
+int time_memory;
+long long unsigned *seconds;
+long long unsigned *nano_seconds;
+
+/* Global variables for OSS */
+int throughput;
+int turnaround_time;
+int waiting_time;
+double cpu_utilization;
+
+/* Global variables for USER */
+
 
 /* Function prototypes */
 void detachMemory();
+void alarmHandler();
+void segfaultHandler();
+void interruptHandler();
 
 #endif /* Proj5_h */
