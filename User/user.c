@@ -13,14 +13,46 @@ int main(int argc, const char * argv[]) {
     signal(SIGSEGV, segfaultHandler);
     signal(SIGALRM, alarmHandler);
     
-    sleep(1);
-    printf("Hello, from process %i!\n", getpid());
+    /***********
+     argv[0] is the process ID as given by oss.
+     argv[1] is the creation time of the process.
+     ***********/
     
+    /* Get shared memory */
+    if((time_memory = shmget(MEMORY_KEY, memory_size, 0777)) == -1) {
+        printf("User %i (process %i) failed to get shared memory. Exiting program...\n", atoi(argv[0]), getpid());
+        perror("User shmget: ");
+        exit(1);
+    }
+    
+    /* Attach to shared memory */
+    ossStruct = shmat(time_memory, NULL, 0);
+//    if ((ossStruct->seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
+//        printf("User %i (process %i) failed to attach to shared memory. Exiting program...\n", atoi(argv[0]), getpid());
+//        perror("User shmat: ");
+//        exit(1);
+//    }
+    
+//    ossStruct->nano_seconds = ossStruct->seconds + 1;
+    
+//    printf("Hello, from process %i at time %.09f!\n", atoi(argv[0]), *ossStruct->seconds + (double)*ossStruct->nano_seconds / NANO);
+    
+    const int CREATION_TIME = atoi(argv[1]);
+    while ((ossStruct->seconds * NANO + ossStruct->nano_seconds - CREATION_TIME) <= NANO) {
+        
+    }
+    
+    printf("Process %i creation time: %d\t End time: %.09f\n", atoi(argv[0]), atoi(argv[1]), (ossStruct->seconds + (double)ossStruct->nano_seconds / NANO));
+//    printf("Process %i has now been around for at least 1 logical second.\n", atoi(argv[0]));
+    detachMemory();
     return 0;
 }
 
 void detachMemory() {
-    
+//    shmdt(seconds);
+//    shmdt(nano_seconds);
+    shmdt(ossStruct);
+    exit(0);
 }
 
 void segfaultHandler() {
@@ -39,8 +71,6 @@ void interruptHandler() {
 }
 
 void alarmHandler() {
-    sleep(1);
     printf("User process %i is being put away because time is up.\n", getpid());
-    
-    exit(0);
+    detachMemory();
 }

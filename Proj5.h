@@ -19,17 +19,24 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/shm.h>
-#include <sys/msg.h>
+//#include <sys/msg.h>
+#include <semaphore.h>
 #include <sys/ipc.h>
 #include <sys/types.h>
 #include <errno.h>
 
 #define MEMORY_KEY 18137644
+#define NANO 1000000000L
 
 /* Global variables for all */
-int time_memory;
-long long unsigned *seconds;
-long long unsigned *nano_seconds;
+int memory_size = sizeof(long long unsigned) * 3;
+int time_memory, bin_semaphore;
+typedef struct oss_struct {
+    long long unsigned seconds;
+    long long unsigned nano_seconds;
+    sem_t sem;
+} oss_t;
+oss_t *ossStruct;
 
 /* Global variables for OSS */
 int throughput;
@@ -41,6 +48,7 @@ double cpu_utilization;
 
 
 /* Function prototypes */
+void printHelpMenu();
 void detachMemory();
 void alarmHandler();
 void segfaultHandler();

@@ -13,66 +13,133 @@ int main(int argc, const char * argv[]) {
     signal(SIGINT, interruptHandler);
     printf("This is OSS son!\n");
     
-    const int NANO = 1000000000L;
+    int option, index, verbose = 0;
+    char *logfile = "logfile.txt";
+    
+    while ((option = getopt(argc, (char **)argv, "hvl:")) != -1) {
+        switch (option) {
+            case 'h':
+                printHelpMenu();
+                break;
+            case 'v':
+                verbose = 1;
+                break;
+            case 'l':
+                logfile = optarg;
+                break;
+            case '?':
+                if (optopt == 'l')
+                    fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+                else if (isprint (optopt))
+                    fprintf(stderr, "Unknown option '-%c'.\n", optopt);
+                else
+                    fprintf(stderr, "Unknown option character '%s'.\n", optarg);
+                break;
+            default:
+                break;
+        }
+    }
+    
+    for (index = optind; index < argc; index++) {
+        printf("Non-option argument \"%s\"\n", argv[index]);
+    }
+    
+    printf("Logfile: %s\n", logfile);
+    if (verbose)
+        printf("Verbose logfile entries are on.\n");
+    
+    
     
     /* Create shared memory */
-    if((time_memory = shmget(MEMORY_KEY, sizeof(long long unsigned) * 3, IPC_CREAT | 0777)) == -1) {
+    if((time_memory = shmget(MEMORY_KEY, sizeof(oss_t), IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory. Exiting program...\n");
         perror("OSS shmcreat");
         exit(1);
     }
     
     /* Attach to shared memory */
-    if((seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
-        printf("OSS failed to attach to shared memory. Exiting program...\n");
-        perror("OSS shmat");
-        exit(1);
-    }
-    nano_seconds = seconds + 1;
+    ossStruct = shmat(time_memory, NULL, 0);
+//    if((ossStruct = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
+//        printf("OSS failed to attach to shared memory. Exiting program...\n");
+//        perror("OSS shmat");
+//        exit(1);
+//    }
+//    ossStruct->nano_seconds = ossStruct->seconds + 1;
     
-    *seconds = 0;
-    *nano_seconds = 0;
+    ossStruct->seconds = 0;
+    ossStruct->nano_seconds = 0;
     
+    
+    
+    int max_processes = 18, process_count = 0, process_number = 1;
+    char procID[10], creationTime[15];
+    pid_t wpid, pid;
+    int status, runtime = 4;
     srand((unsigned)time(NULL));
     alarm(20);
     signal(SIGALRM, alarmHandler);
-    while (*seconds < 10) {
-        *nano_seconds += rand() % 10000;
-        if (*nano_seconds > NANO) {
-            (*seconds)++;
-            *nano_seconds %= NANO;
+    while (ossStruct->seconds < runtime) {
+        ossStruct->nano_seconds += rand() % 10000;
+        if (ossStruct->nano_seconds >= NANO) {
+            ossStruct->seconds++;
+            ossStruct->nano_seconds %= NANO;
         }
         
-//        if (fork() == 0) {
-//            execl("./user", (char *)NULL);
-//            exit(EXIT_FAILURE);
-//        }
+        long long unsigned current_time = ossStruct->seconds * NANO + ossStruct->nano_seconds;
+        
+        if (process_count < max_processes && current_time <= (runtime * NANO - (double)(runtime * NANO) * 0.1)) {
+            pid = fork();
+            process_count++;
+            sprintf(procID, "%i", process_number);
+            sprintf(creationTime, "%llu", current_time);
+            process_number++;
+            if (pid == 0) {
+                execl("./user", procID, creationTime, (char *)NULL);
+                exit(EXIT_FAILURE);
+            }
+        }
+        
+        int processID = waitpid(0, NULL, WNOHANG);
+        if (processID > 0) {
+            process_count--;
+        }
+        
     }
     
-    
+//    sleep(3);
     /* Wait for all child processes to finish. */
-    pid_t wpid;
-    int status;
     while ((wpid = wait(&status)) > 0);
     
-    printf("Time on deck: %.09f seconds.\n", *seconds + (double)*nano_seconds / NANO);
+    sleep(1);
+    printf("Finished waiting\n");
+    
     detachMemory();
     return 0;
+}
+
+void printHelpMenu() {
+    printf("'-h' prints this help menu.\n");
+    printf("\"-l fileName\" will assign the argument 'fileName' to the variable 'logfile'.\n");
+    printf("\n");
 }
 
 
 /* Detach from and release all shared memory */
 void detachMemory() {
-    shmdt(nano_seconds);
-    shmdt(seconds);
+    printf("Time on deck: %.09f seconds.\n", ossStruct->seconds + (double)ossStruct->nano_seconds / NANO);
+    
+//    shmdt(ossStruct->nano_seconds);
+//    shmdt(ossStruct->seconds);
+    shmdt(ossStruct);
     shmctl(time_memory, IPC_RMID, NULL);
 }
 
 void alarmHandler() {
     printf("Time has expired!\n");
+    pid_t wpid, groupID = getpgrp();
+    int status;
+    killpg(groupID, SIGALRM);
     
-    killpg(getpgrp(), SIGALRM);
-    pid_t wpid; int status;
     while ((wpid = wait(&status)) > 0);
     
     detachMemory();
