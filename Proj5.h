@@ -31,12 +31,12 @@
 /* Global variables for all */
 int memory_size = sizeof(long long unsigned) * 3;
 int time_memory, bin_semaphore;
-typedef struct oss_struct {
-    long long unsigned seconds;
-    long long unsigned nano_seconds;
+//typedef struct oss_struct {
+    long long unsigned *seconds;
+    long long unsigned *nano_seconds;
     sem_t sem;
-} oss_t;
-oss_t *ossStruct;
+//} oss_t;
+//oss_t *ossStruct;
 
 /* Global variables for OSS */
 int throughput;

@@ -26,32 +26,29 @@ int main(int argc, const char * argv[]) {
     }
     
     /* Attach to shared memory */
-    ossStruct = shmat(time_memory, NULL, 0);
-//    if ((ossStruct->seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
-//        printf("User %i (process %i) failed to attach to shared memory. Exiting program...\n", atoi(argv[0]), getpid());
-//        perror("User shmat: ");
-//        exit(1);
-//    }
-    
-//    ossStruct->nano_seconds = ossStruct->seconds + 1;
-    
-//    printf("Hello, from process %i at time %.09f!\n", atoi(argv[0]), *ossStruct->seconds + (double)*ossStruct->nano_seconds / NANO);
-    
-    const int CREATION_TIME = atoi(argv[1]);
-    while ((ossStruct->seconds * NANO + ossStruct->nano_seconds - CREATION_TIME) <= NANO) {
-        
+    if ((seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
+        printf("User %i (process %i) failed to attach to shared memory. Exiting program...\n", atoi(argv[0]), getpid());
+        perror("User shmat: ");
+        exit(1);
     }
     
-    printf("Process %i creation time: %d\t End time: %.09f\n", atoi(argv[0]), atoi(argv[1]), (ossStruct->seconds + (double)ossStruct->nano_seconds / NANO));
+    nano_seconds = seconds + 1;
+    
+    printf("Hello, from process %i at time %.09f!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO);
+    
+    const int CREATION_TIME = atoi(argv[1]);
+    while ((*seconds * NANO + *nano_seconds - CREATION_TIME) <= NANO) {
+        
+    }
 //    printf("Process %i has now been around for at least 1 logical second.\n", atoi(argv[0]));
+    sleep(1);
     detachMemory();
     return 0;
 }
 
 void detachMemory() {
-//    shmdt(seconds);
-//    shmdt(nano_seconds);
-    shmdt(ossStruct);
+    shmdt(seconds);
+    shmdt(nano_seconds);
     exit(0);
 }
 

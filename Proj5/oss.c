@@ -51,41 +51,39 @@ int main(int argc, const char * argv[]) {
     
     
     /* Create shared memory */
-    if((time_memory = shmget(MEMORY_KEY, sizeof(oss_t), IPC_CREAT | 0777)) == -1) {
+    if((time_memory = shmget(MEMORY_KEY, memory_size, IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory. Exiting program...\n");
         perror("OSS shmcreat");
         exit(1);
     }
     
     /* Attach to shared memory */
-    ossStruct = shmat(time_memory, NULL, 0);
-//    if((ossStruct = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
-//        printf("OSS failed to attach to shared memory. Exiting program...\n");
-//        perror("OSS shmat");
-//        exit(1);
-//    }
-//    ossStruct->nano_seconds = ossStruct->seconds + 1;
+    if((seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
+        printf("OSS failed to attach to shared memory. Exiting program...\n");
+        perror("OSS shmat");
+        exit(1);
+    }
+    nano_seconds = seconds + 1;
     
-    ossStruct->seconds = 0;
-    ossStruct->nano_seconds = 0;
-    
+    *seconds = 0;
+    *nano_seconds = 0;
     
     
     int max_processes = 18, process_count = 0, process_number = 1;
     char procID[10], creationTime[15];
     pid_t wpid, pid;
-    int status, runtime = 4;
+    int status, runtime = 5;
     srand((unsigned)time(NULL));
     alarm(20);
     signal(SIGALRM, alarmHandler);
-    while (ossStruct->seconds < runtime) {
-        ossStruct->nano_seconds += rand() % 10000;
-        if (ossStruct->nano_seconds >= NANO) {
-            ossStruct->seconds++;
-            ossStruct->nano_seconds %= NANO;
+    while (*seconds < runtime) {
+        *nano_seconds += rand() % 10000;
+        if (*nano_seconds >= NANO) {
+            (*seconds)++;
+            *nano_seconds %= NANO;
         }
         
-        long long unsigned current_time = ossStruct->seconds * NANO + ossStruct->nano_seconds;
+        long long unsigned current_time = *seconds * NANO + *nano_seconds;
         
         if (process_count < max_processes && current_time <= (runtime * NANO - (double)(runtime * NANO) * 0.1)) {
             pid = fork();
@@ -126,11 +124,10 @@ void printHelpMenu() {
 
 /* Detach from and release all shared memory */
 void detachMemory() {
-    printf("Time on deck: %.09f seconds.\n", ossStruct->seconds + (double)ossStruct->nano_seconds / NANO);
+    printf("Time on deck: %.09f seconds.\n", *seconds + (double)*nano_seconds / NANO);
     
-//    shmdt(ossStruct->nano_seconds);
-//    shmdt(ossStruct->seconds);
-    shmdt(ossStruct);
+    shmdt(nano_seconds);
+    shmdt(seconds);
     shmctl(time_memory, IPC_RMID, NULL);
 }
 
