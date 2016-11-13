@@ -29,17 +29,22 @@
 #include <sys/stat.h>       /* For mode constants */
 
 #define MEMORY_KEY 18137644
+#define RESOURCE_KEY 44673181
 #define NANO 1000000000L
+
+/* Struct for resources */
+typedef struct resource_control_block {
+    int isShareable;
+    
+} rcb_t;
 
 /* Global variables for all */
 int memory_size = sizeof(long long unsigned) * 3;
-int time_memory, bin_semaphore;
-//typedef struct oss_struct {
-    long long unsigned *seconds;
-    long long unsigned *nano_seconds;
-    sem_t *sem;
-//} oss_t;
-//oss_t *ossStruct;
+int time_memory, resource_memory;
+long long unsigned *seconds;
+long long unsigned *nano_seconds;
+sem_t *sem;
+
 
 /* Global variables for OSS */
 int throughput;

@@ -7,6 +7,7 @@
 //
 
 #include "Proj5.h"
+static long long unsigned next_creation_time = 0;
 
 int main(int argc, const char * argv[]) {
     signal(SIGSEGV, segfaultHandler);
@@ -67,7 +68,7 @@ int main(int argc, const char * argv[]) {
     
     *seconds = 0;
     *nano_seconds = 0;
-    sem = sem_open("/mySem", O_CREAT, 0777, 0);
+    sem = sem_open("/mySem", O_CREAT, 0777, 1);
     
     if(sem == SEM_FAILED) {
         printf("Semaphore failed to create. Exiting program...\n");
@@ -76,17 +77,21 @@ int main(int argc, const char * argv[]) {
     }
     
 //    printf("Sem value: %i", *sem);
-    sem_post(sem);
-//    sem_wait(sem);
+    if (sem_post(sem) == -1) {
+        perror("oss sem_post");
+    }
+//    if (sem_wait(sem) == -1)
+//        perror("oss sem_wait");
 //    printf("sem value: \n", );
     
-    int max_processes = 18, process_count = 0, process_number = 1;
-    char procID[10], creationTime[15];
+    int max_processes = 18, process_count = 0, process_number = 1;//, creation_time_set = 0;
+    char procID[10], process_creation_time[15];
     pid_t wpid, pid;
     int status, runtime = 20;
     srand((unsigned)time(NULL));
-    alarm(20);
+    alarm(30);
     signal(SIGALRM, alarmHandler);
+//    printf("Process\tCurrent time\tCreation time\tDifference\n");
     while (*seconds < runtime) {
         *nano_seconds += rand() % 10000;
         if (*nano_seconds >= NANO) {
@@ -96,15 +101,19 @@ int main(int argc, const char * argv[]) {
         
         long long unsigned current_time = *seconds * NANO + *nano_seconds;
         
-        if (process_count < max_processes && current_time <= (runtime * NANO - (double)(runtime * NANO) * 0.1)) {
-            pid = fork();
+        if (process_count < max_processes && next_creation_time <= current_time) {
+            next_creation_time = (*seconds * NANO + *nano_seconds + (1 + rand() % 500000000));
+//            double time1 = (double)current_time / NANO, time2 = (double)next_creation_time / NANO;
+//            printf("%i\t\t%.09f\t\t\t%.09f\t\t\t%.09f\n", process_number, time1, time2, time2 - time1);
+//            sleep(1);
             process_count++;
             sprintf(procID, "%i", process_number);
-            sprintf(creationTime, "%llu", current_time);
+            sprintf(process_creation_time, "%.09f", (double)current_time / NANO);
             process_number++;
-//            sem_post(sem);
+            pid = fork();
             if (pid == 0) {
-                execl("./user", procID, creationTime, (char *)NULL);
+                execl("./user", procID, process_creation_time, (char *)NULL);
+                printf("Process didn't exec properly.\n");
                 exit(EXIT_FAILURE);
             }
         }
@@ -112,8 +121,10 @@ int main(int argc, const char * argv[]) {
         int processID = waitpid(0, NULL, WNOHANG);
         if (processID > 0) {
             process_count--;
+//            sem_post(sem);
+//            if(sem_post(sem) == 0)
+//                printf("sem_post(sem) successful\n");
 //            sleep(1);
-            sem_post(sem);
         }
         
     }
@@ -140,8 +151,10 @@ void printHelpMenu() {
 void detachMemory() {
     printf("Time on deck: %.09f seconds.\n", *seconds + (double)*nano_seconds / NANO);
     
+    /* Unlink and close the semaphore. Unlink ONLY happens here, not in child processes. */
     sem_unlink("/mySem");
     sem_close(sem);
+    
     shmdt(nano_seconds);
     shmdt(seconds);
     shmctl(time_memory, IPC_RMID, NULL);
