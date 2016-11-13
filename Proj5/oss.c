@@ -67,12 +67,23 @@ int main(int argc, const char * argv[]) {
     
     *seconds = 0;
     *nano_seconds = 0;
+    sem = sem_open("/mySem", O_CREAT, 0777, 0);
     
+    if(sem == SEM_FAILED) {
+        printf("Semaphore failed to create. Exiting program...\n");
+        perror("parent sem_open");
+        exit(1);
+    }
+    
+//    printf("Sem value: %i", *sem);
+    sem_post(sem);
+//    sem_wait(sem);
+//    printf("sem value: \n", );
     
     int max_processes = 18, process_count = 0, process_number = 1;
     char procID[10], creationTime[15];
     pid_t wpid, pid;
-    int status, runtime = 5;
+    int status, runtime = 20;
     srand((unsigned)time(NULL));
     alarm(20);
     signal(SIGALRM, alarmHandler);
@@ -91,6 +102,7 @@ int main(int argc, const char * argv[]) {
             sprintf(procID, "%i", process_number);
             sprintf(creationTime, "%llu", current_time);
             process_number++;
+//            sem_post(sem);
             if (pid == 0) {
                 execl("./user", procID, creationTime, (char *)NULL);
                 exit(EXIT_FAILURE);
@@ -100,6 +112,8 @@ int main(int argc, const char * argv[]) {
         int processID = waitpid(0, NULL, WNOHANG);
         if (processID > 0) {
             process_count--;
+//            sleep(1);
+            sem_post(sem);
         }
         
     }
@@ -126,6 +140,8 @@ void printHelpMenu() {
 void detachMemory() {
     printf("Time on deck: %.09f seconds.\n", *seconds + (double)*nano_seconds / NANO);
     
+    sem_unlink("/mySem");
+    sem_close(sem);
     shmdt(nano_seconds);
     shmdt(seconds);
     shmctl(time_memory, IPC_RMID, NULL);
@@ -133,11 +149,11 @@ void detachMemory() {
 
 void alarmHandler() {
     printf("Time has expired!\n");
-    pid_t wpid, groupID = getpgrp();
-    int status;
+    pid_t groupID = getpgrp();
+//    int status;
     killpg(groupID, SIGALRM);
     
-    while ((wpid = wait(&status)) > 0);
+//    while ((wpid = wait(&status)) > 0);
     
     detachMemory();
     exit(0);

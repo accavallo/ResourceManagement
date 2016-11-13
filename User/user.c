@@ -33,20 +33,32 @@ int main(int argc, const char * argv[]) {
     }
     
     nano_seconds = seconds + 1;
+    /* Open the named semaphore since sem_init() is deprecated... */
+    sem = sem_open("/mySem", 0777);
     
-    printf("Hello, from process %i at time %.09f!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO);
+//    sleep(1);
+    sem_wait(sem);
+    printf("Hello, from process %3i at time %.09f!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO);
     
-    const int CREATION_TIME = atoi(argv[1]);
-    while ((*seconds * NANO + *nano_seconds - CREATION_TIME) <= NANO) {
-        
-    }
-//    printf("Process %i has now been around for at least 1 logical second.\n", atoi(argv[0]));
+
+//    const int CREATION_TIME = atoi(argv[1]);
+//    while ((*seconds * NANO + *nano_seconds - CREATION_TIME) <= NANO) {
+//        
+//    }
+    
+    printf("Process %i ending at time %.09f.\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO);
+//    sem_post(sem);
+//    nanosleep(<#const struct timespec *__rqtp#>, <#struct timespec *__rmtp#>)
+//    usleep(5000);
     sleep(1);
+    
+//    printf("Process %i has now been around for at least 1 logical second.\n", atoi(argv[0]));
     detachMemory();
     return 0;
 }
 
 void detachMemory() {
+    sem_unlink("/mySem");
     shmdt(seconds);
     shmdt(nano_seconds);
     exit(0);

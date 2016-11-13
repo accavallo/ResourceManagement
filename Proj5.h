@@ -9,21 +9,24 @@
 #ifndef Proj5_h
 #define Proj5_h
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <signal.h>
-#include <getopt.h>
-#include <string.h>
-#include <ctype.h>
-#include <time.h>
-#include <sys/time.h>
-#include <sys/shm.h>
-//#include <sys/msg.h>
-#include <semaphore.h>
-#include <sys/ipc.h>
-#include <sys/types.h>
-#include <errno.h>
+#include <stdio.h>          /* Basic functions */
+#include <stdlib.h>         /* Some other basic functions */
+#include <unistd.h>         /* For execl */
+#include <signal.h>         /* For signal handling */
+#include <getopt.h>         /* For command line options */
+#include <string.h>         /* atoi(string) */
+#include <ctype.h>          /* For isprint in getopt */
+#include <time.h>           /* srand(unsigned) */
+#include <sys/time.h>       /* POSIX standard, same as time.h */
+#include <sys/shm.h>        /* For shared memory */
+#include <sys/msg.h>        /* For message passing */
+#include <semaphore.h>      /* For semaphore usage */
+//#include <sys/sem.h>
+#include <sys/ipc.h>        /* For inter-process communication */
+//#include <sys/types.h>      /*  */
+#include <errno.h>          /* To set errno for perror */
+#include <fcntl.h>          /* For O_* constants */
+#include <sys/stat.h>       /* For mode constants */
 
 #define MEMORY_KEY 18137644
 #define NANO 1000000000L
@@ -34,7 +37,7 @@ int time_memory, bin_semaphore;
 //typedef struct oss_struct {
     long long unsigned *seconds;
     long long unsigned *nano_seconds;
-    sem_t sem;
+    sem_t *sem;
 //} oss_t;
 //oss_t *ossStruct;
 
