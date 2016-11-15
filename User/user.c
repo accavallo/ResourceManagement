@@ -13,9 +13,12 @@ int main(int argc, const char * argv[]) {
     signal(SIGSEGV, segfaultHandler);
     signal(SIGALRM, alarmHandler);
     
+    /* Need another interrupt handler, maybe, for when deadlock detection terminates a process */
+    
     /***********
      argv[0] is the process ID as given by oss.
      argv[1] is the creation time of the process.
+     argv[2] is the logical run time for oss.
      ***********/
     
     /* Get shared memory */
@@ -37,21 +40,29 @@ int main(int argc, const char * argv[]) {
     sem = sem_open("/mySem", 0);
     if (sem == SEM_FAILED) {
         perror("user sem_open");
+        printf("User %i failed to open semaphore. Exiting program...\n", atoi(argv[0]));
+        exit(1);
     }
 
-    printf("Hello, from process %3i at time %.09f with creation time %s!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO, argv[1]);
+    printf("Hello, from process %3i at time %.09f!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO);
 
     sem_wait(sem);
-
-    printf("Process %i ending at time %.09f.\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO);
     
-//    const int CREATION_TIME = atoi(argv[1]);
-//    while ((*seconds * NANO + *nano_seconds - CREATION_TIME) <= NANO) {
-//        
-//    }
-    sleep(1);
+    const double CREATION_TIME = atof(argv[1]);
+    double current_time = *seconds + (double)*nano_seconds / NANO;
+    int continueLoop = 1;
+    while (continueLoop) {
+        if (current_time - CREATION_TIME >= 1) {
+            printf("Process %s has been around for %.09f seconds.\n", argv[0], current_time - CREATION_TIME);
+            continueLoop = 0;
+        } else if (atoi(argv[2]) <= *seconds)
+            continueLoop = 0;
+        
+        current_time = *seconds + (double)*nano_seconds / NANO;
+    }
+    
     sem_post(sem);
-//    sleep(1);
+    printf("Process %i ending at time %.09f.\n", atoi(argv[0]), *seconds + (double)*nano_seconds / NANO);
     
     detachMemory();
     return 0;
@@ -71,9 +82,6 @@ void segfaultHandler() {
 }
 
 void interruptHandler() {
-//    printf("KNOCK ON MY DOOR, KNOCK NEXT TIME! Did you see anything?!\nNo, sir! I didn't see you playing with your processes again!\n");
-    
-    
     fprintf(stderr, "USER process %i got interrupted while being played with.\n", getpid());
     detachMemory();
 }

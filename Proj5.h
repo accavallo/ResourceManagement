@@ -50,6 +50,7 @@ sem_t *sem;
 int throughput;
 int turnaround_time;
 int waiting_time;
+int verbose;
 double cpu_utilization;
 
 /* Global variables for USER */
@@ -61,5 +62,6 @@ void detachMemory();
 void alarmHandler();
 void segfaultHandler();
 void interruptHandler();
+void deadlockDetection();
 
 #endif /* Proj5_h */

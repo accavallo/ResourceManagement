@@ -13,8 +13,8 @@ int main(int argc, const char * argv[]) {
     signal(SIGSEGV, segfaultHandler);
     signal(SIGINT, interruptHandler);
     printf("This is OSS son!\n");
-    
-    int option, index, verbose = 0;
+    verbose = 0;
+    int option, index;
     char *logfile = "logfile.txt";
     
     while ((option = getopt(argc, (char **)argv, "hvl:")) != -1) {
@@ -80,39 +80,40 @@ int main(int argc, const char * argv[]) {
     if (sem_post(sem) == -1) {
         perror("oss sem_post");
     }
+    
 //    if (sem_wait(sem) == -1)
 //        perror("oss sem_wait");
 //    printf("sem value: \n", );
     
-    int max_processes = 18, process_count = 0, process_number = 1;//, creation_time_set = 0;
-    char procID[10], process_creation_time[15];
+    int max_processes = 18, process_count = 0, process_number = 1;
+    char procID[10], process_creation_time[15], logical_run_time[3];
     pid_t wpid, pid;
-    int status, runtime = 20;
+    int status, runtime = 5;
     srand((unsigned)time(NULL));
     alarm(30);
     signal(SIGALRM, alarmHandler);
-//    printf("Process\tCurrent time\tCreation time\tDifference\n");
     while (*seconds < runtime) {
         *nano_seconds += rand() % 10000;
         if (*nano_seconds >= NANO) {
             (*seconds)++;
             *nano_seconds %= NANO;
+            /* Check for deadlock and take corrective action if necessary. */
+            deadlockDetection();
         }
         
         long long unsigned current_time = *seconds * NANO + *nano_seconds;
         
         if (process_count < max_processes && next_creation_time <= current_time) {
             next_creation_time = (*seconds * NANO + *nano_seconds + (1 + rand() % 500000000));
-//            double time1 = (double)current_time / NANO, time2 = (double)next_creation_time / NANO;
-//            printf("%i\t\t%.09f\t\t\t%.09f\t\t\t%.09f\n", process_number, time1, time2, time2 - time1);
-//            sleep(1);
+            
             process_count++;
             sprintf(procID, "%i", process_number);
             sprintf(process_creation_time, "%.09f", (double)current_time / NANO);
+            sprintf(logical_run_time, "%i", runtime);
             process_number++;
             pid = fork();
             if (pid == 0) {
-                execl("./user", procID, process_creation_time, (char *)NULL);
+                execl("./user", procID, process_creation_time, logical_run_time, (char *)NULL);
                 printf("Process didn't exec properly.\n");
                 exit(EXIT_FAILURE);
             }
@@ -121,15 +122,9 @@ int main(int argc, const char * argv[]) {
         int processID = waitpid(0, NULL, WNOHANG);
         if (processID > 0) {
             process_count--;
-//            sem_post(sem);
-//            if(sem_post(sem) == 0)
-//                printf("sem_post(sem) successful\n");
-//            sleep(1);
         }
-        
     }
     
-//    sleep(3);
     /* Wait for all child processes to finish. */
     while ((wpid = wait(&status)) > 0);
     
@@ -194,4 +189,13 @@ void interruptHandler() {
     
     fprintf(stderr, "OSS process %i got interrupted while playing with its processes\n", getpid());
     detachMemory();
+}
+
+void deadlockDetection() {
+    printf("Running deadlock detection...\n");
+    sleep(2);
+    if (verbose) {
+        printf("Writing more stuff to file because verbose statements are turned on.\n");
+    }
+    printf("Deadlock detection finished.\n");
 }
