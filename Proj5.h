@@ -30,13 +30,17 @@
 
 #define MEMORY_KEY 18137644
 #define RESOURCE_KEY 44673181
-#define NANO 1000000000L
+#define BILLION 1000000000L
 
 /* Struct for resources */
 typedef struct resource_control_block {
-    int isShareable;
-    
+    int isShareable;                /* Will either equal 1 or 0 */
+    int maxResourceCount;           /* The total number of resources for requesting purposes */
+    int currentResourceCount;       /* The current number of resources */
+    int resourcesAllocated[18][1];  /* Shows where resources are allocated */
 } rcb_t;
+
+rcb_t *RCB_array;
 
 /* Global variables for all */
 int memory_size = sizeof(long long unsigned) * 3;
@@ -56,12 +60,15 @@ double cpu_utilization;
 /* Global variables for USER */
 
 
-/* Function prototypes */
-void printHelpMenu();
+/* Function prototypes for all */
 void detachMemory();
 void alarmHandler();
 void segfaultHandler();
 void interruptHandler();
+
+/* Function prototypes for OSS */
+void printHelpMenu();
 void deadlockDetection();
+void setupResourceBlocks();
 
 #endif /* Proj5_h */
