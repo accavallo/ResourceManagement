@@ -99,9 +99,8 @@ int main(int argc, const char * argv[]) {
     int max_processes = 18, process_count = 0, process_number = 1;
     char procID[10], process_creation_time[15], logical_run_time[3];
     pid_t wpid, pid;
-    int status, runtime = 5;
+    int status, runtime = 25;
     srand((unsigned)time(NULL));
-    printf("And now to continue with your regularly scheduled program\n");
     alarm(30);
     signal(SIGALRM, alarmHandler);
     while (*seconds < runtime) {
@@ -116,7 +115,9 @@ int main(int argc, const char * argv[]) {
         long long unsigned current_time = *seconds * BILLION + *nano_seconds;
         
         if (process_count < max_processes && next_creation_time <= current_time) {
-            next_creation_time = (*seconds * BILLION + *nano_seconds + (1 + rand() % 500000000));
+            /* 1ms = 1,000,000ns */
+            /* Processes should create between 1ms and 500ms */
+            next_creation_time = (*seconds * BILLION + *nano_seconds + (1000000 + rand() % 499000001));
             
             process_count++;
             sprintf(procID, "%i", process_number);
@@ -238,6 +239,8 @@ void setupResourceBlocks() {
         } else {
             RCB_array[i].maxResourceCount = 1 + rand() % 10;
         }
+//        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
     }
     sleep(2);
+    printf("And now to continue with your regularly scheduled program\n");
 }

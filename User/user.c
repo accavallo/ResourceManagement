@@ -58,20 +58,33 @@ int main(int argc, const char * argv[]) {
     }
 
     printf("Hello, from process %3i at time %.09f!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION);
-
+    
+    /* Every process needs to wait its turn... */
     sem_wait(sem);
     
     const double CREATION_TIME = atof(argv[1]);
+    srand((unsigned)time(NULL));
     double current_time = *seconds + (double)*nano_seconds / BILLION;
+    /* Set the first terminate check for at least 1 second after it has been around */
+    double terminate_time = current_time + 1 + (rand() % 250000000) / (double)BILLION;
+    printf("First terminate time check for %i is set to %.09f.\n", atoi(argv[0]), terminate_time + CREATION_TIME);
     int continueLoop = 1;
     /* In this loop there needs to be some resource requests. */
     //TODO: Determine number of resources to request.
     //TODO: Make resource requests at random times for random resources.
     while (continueLoop) {
-        //TODO: Check between 1 ms and 250 ms to determine if the process will finish.
-        if (current_time - CREATION_TIME >= 1) {
-            printf("Process %s has been around for %.09f seconds.\n", argv[0], current_time - CREATION_TIME);
-            continueLoop = 0;
+        /*Check between 1 ms and 250 ms to determine if the process will finish, after it has been around for at least one second */
+        if ((terminate_time + CREATION_TIME) <= current_time) {
+            /* Check if this process will terminate */
+            if (rand() % 2) {
+                continueLoop = 0;
+                printf("Releasing memory and resources from %i\n", atoi(argv[0]));
+                /* Send resources back to the plane from whence they came */
+            } else {
+                terminate_time = current_time + (rand() % 250000000) / (double)BILLION;
+                printf("%i trudges on... until at least %.09f\n", atoi(argv[0]), terminate_time);
+            }
+            
         } else if (atoi(argv[2]) <= *seconds)
             continueLoop = 0;
         
@@ -80,7 +93,7 @@ int main(int argc, const char * argv[]) {
     }
     
     sem_post(sem);
-    printf("Process %i ending at time %.09f.\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION);
+    printf("Process %i ending at time %.09f. Last check was at %.09f\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION, terminate_time);
     
     detachMemory();
     return 0;
