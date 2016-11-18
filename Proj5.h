@@ -47,6 +47,7 @@ int memory_size = sizeof(long long unsigned) * 3;
 int time_memory, resource_memory;
 long long unsigned *seconds;
 long long unsigned *nano_seconds;
+
 sem_t *sem;
 
 

@@ -19,8 +19,10 @@ int main(int argc, const char * argv[]) {
      argv[0] is the process ID as given by oss.
      argv[1] is the creation time of the process.
      argv[2] is the logical run time for oss.
+     argv[3] is the chance that the child process will terminate.
      ***********/
     
+    int terminate_chance = atoi(argv[3]);
     /* Get shared memory for time */
     if((time_memory = shmget(MEMORY_KEY, memory_size, 0777)) == -1) {
         printf("User %i (process %i) failed to get shared memory. Exiting program...\n", atoi(argv[0]), getpid());
@@ -76,11 +78,13 @@ int main(int argc, const char * argv[]) {
         /*Check between 1 ms and 250 ms to determine if the process will finish, after it has been around for at least one second */
         if ((terminate_time + CREATION_TIME) <= current_time) {
             /* Check if this process will terminate */
-            if (rand() % 2) {
+            if ((1 + rand() % 100) <= terminate_chance) {
                 continueLoop = 0;
                 printf("Releasing memory and resources from %i\n", atoi(argv[0]));
                 /* Send resources back to the plane from whence they came */
             } else {
+                /* Request resources and set up a new time to either terminate or ask for resources */
+                
                 terminate_time = current_time + (rand() % 250000000) / (double)BILLION;
                 printf("%i trudges on... until at least %.09f\n", atoi(argv[0]), terminate_time);
             }

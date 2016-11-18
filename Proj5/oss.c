@@ -8,16 +8,17 @@
 
 #include "Proj5.h"
 static long long unsigned next_creation_time = 0;
+static int deadLock = 0;
 
 int main(int argc, const char * argv[]) {
     signal(SIGSEGV, segfaultHandler);
     signal(SIGINT, interruptHandler);
     printf("This is OSS son!\n");
     verbose = 0;
-    int option, index;
+    int option, index, terminate_chance = 50;
     char *logfile = "logfile.txt";
     
-    while ((option = getopt(argc, (char **)argv, "hvl:")) != -1) {
+    while ((option = getopt(argc, (char **)argv, "hvl:t:")) != -1) {
         switch (option) {
             case 'h':
                 printHelpMenu();
@@ -27,6 +28,12 @@ int main(int argc, const char * argv[]) {
                 break;
             case 'l':
                 logfile = optarg;
+                break;
+            case 't':
+                if (atoi(argv[3]))
+                    terminate_chance = atoi(argv[3]);
+                else
+                    printf("Exptected Integer, found %s instead", optarg);
                 break;
             case '?':
                 if (optopt == 'l')
@@ -45,19 +52,20 @@ int main(int argc, const char * argv[]) {
         printf("Non-option argument \"%s\"\n", argv[index]);
     
     printf("Logfile: %s\n", logfile);
+    printf("Terminate chance: %i%%\n", terminate_chance);
     if (verbose)
         printf("Verbose logfile entries are on.\n");
     
     
     
-    /* Create shared memory */
+    /* Create shared memory for time */
     if((time_memory = shmget(MEMORY_KEY, memory_size, IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory. Exiting program...\n");
         perror("OSS shmget time memory:");
         exit(1);
     }
     
-    /* Attach to shared memory */
+    /* Attach to shared memory for time */
     if((seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
         printf("OSS failed to attach to shared memory. Exiting program...\n");
         perror("OSS shmat time memory:");
@@ -97,7 +105,7 @@ int main(int argc, const char * argv[]) {
         perror("oss sem_post");
     
     int max_processes = 18, process_count = 0, process_number = 1;
-    char procID[10], process_creation_time[15], logical_run_time[3];
+    char procID[10], process_creation_time[15], logical_run_time[3], term_chance[4]; sprintf(term_chance, "%i", terminate_chance);
     pid_t wpid, pid;
     int status, runtime = 25;
     srand((unsigned)time(NULL));
@@ -126,7 +134,7 @@ int main(int argc, const char * argv[]) {
             process_number++;
             pid = fork();
             if (pid == 0) {
-                execl("./user", procID, process_creation_time, logical_run_time, (char *)NULL);
+                execl("./user", procID, process_creation_time, logical_run_time, term_chance, (char *)NULL);
                 printf("Process didn't exec properly.\n");
                 exit(EXIT_FAILURE);
             }
@@ -209,14 +217,24 @@ void interruptHandler() {
     detachMemory();
 }
 
-/*  */
+/* Run the deadlock detection algorithm and stop processes if necessary. */
 void deadlockDetection() {
-    printf("Running deadlock detection...\n");
-    sleep(2);
-    if (verbose) {
-        printf("Writing more stuff to file because verbose statements are turned on.\n");
+    if (deadLock < 4) {
+        deadLock++;
+    
+        srand((unsigned)time(NULL));
+        printf("Running deadlock detection...\n");
+        sleep(1);
+        if (verbose) {
+            printf("Writing more stuff to file because verbose statements are turned on.\n");
+        }
+        if (rand() % 2) {
+            printf("Continuing with deadlock\n");
+            deadlockDetection();
+        } else
+            printf("Deadlock detection finished.\n");
     }
-    printf("Deadlock detection finished.\n");
+    deadLock = 0;
 }
 
 /* Set up the resources blocks. */
