@@ -21,6 +21,7 @@
 #include <sys/shm.h>        /* For shared memory */
 #include <sys/msg.h>        /* For message passing */
 #include <semaphore.h>      /* For semaphore usage */
+#include <stdbool.h>
 //#include <sys/sem.h>
 #include <sys/ipc.h>        /* For inter-process communication */
 //#include <sys/types.h>      /*  */
@@ -34,10 +35,10 @@
 
 /* Struct for resources */
 typedef struct resource_control_block {
-    int isShareable;                /* Will either equal 1 or 0 */
+    bool isShareable;               /* Will either equal 1 or 0 */
     int maxResourceCount;           /* The total number of resources for requesting purposes */
     int currentResourceCount;       /* The current number of resources */
-    int resourcesAllocated[18][1];  /* Shows where resources are allocated */
+    int resourcesAllocated[18];     /* Shows where resources are allocated */
 } rcb_t;
 
 rcb_t *RCB_array;

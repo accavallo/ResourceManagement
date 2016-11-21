@@ -13,7 +13,6 @@ static int deadLock = 0;
 int main(int argc, const char * argv[]) {
     signal(SIGSEGV, segfaultHandler);
     signal(SIGINT, interruptHandler);
-    printf("This is OSS son!\n");
     verbose = 0;
     int option, index, terminate_chance = 50;
     char *logfile = "logfile.txt";
@@ -55,7 +54,7 @@ int main(int argc, const char * argv[]) {
     printf("Terminate chance: %i%%\n", terminate_chance);
     if (verbose)
         printf("Verbose logfile entries are on.\n");
-    
+    sleep(5);
     
     
     /* Create shared memory for time */
@@ -235,6 +234,7 @@ void deadlockDetection() {
             printf("Deadlock detection finished.\n");
     }
     deadLock = 0;
+    sleep(2);
 }
 
 /* Set up the resources blocks. */
@@ -245,7 +245,7 @@ void setupResourceBlocks() {
     printf("willBeShareable is set to %i\n", willBeShareable);
     for (; i < 20; i++) {
         if (rand() % 100 <= willBeShareable) {
-            RCB_array[i].isShareable = 1;
+            RCB_array[i].isShareable = true;
             printf("Resource %i is shareable\n", i);
         } else {
             RCB_array[i].isShareable = 0;
