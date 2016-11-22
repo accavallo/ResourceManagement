@@ -21,10 +21,10 @@
 #include <sys/shm.h>        /* For shared memory */
 #include <sys/msg.h>        /* For message passing */
 #include <semaphore.h>      /* For semaphore usage */
-#include <stdbool.h>
+#include <stdbool.h>        /* For bool type because C doesn't include it automatically. I really hate this language */
 //#include <sys/sem.h>
 #include <sys/ipc.h>        /* For inter-process communication */
-//#include <sys/types.h>      /*  */
+#include <sys/types.h>      /*  */
 #include <errno.h>          /* To set errno for perror */
 #include <fcntl.h>          /* For O_* constants */
 #include <sys/stat.h>       /* For mode constants */
@@ -34,13 +34,19 @@
 #define BILLION 1000000000L
 
 /* Struct for resources */
+typedef struct resourceQueue {
+    struct resourceQueue *parent;
+    struct resourceQueue *child;
+    pid_t pid;
+} rscq_t;
+
 typedef struct resource_control_block {
-    bool isShareable;               /* Will either equal 1 or 0 */
+    bool isShareable;               /* Will either be true or false */
     int maxResourceCount;           /* The total number of resources for requesting purposes */
     int currentResourceCount;       /* The current number of resources */
-    int resourcesAllocated[18];     /* Shows where resources are allocated */
+    rscq_t *head;                   /* Shows where resources are allocated */
+    rscq_t *tail;                   /* Will be used for deadlock. The last resource in the queue will always be the one to go. */
 } rcb_t;
-
 rcb_t *RCB_array;
 
 /* Global variables for all */
@@ -67,10 +73,16 @@ void detachMemory();
 void alarmHandler();
 void segfaultHandler();
 void interruptHandler();
+void signalHandler(int);
 
 /* Function prototypes for OSS */
 void printHelpMenu();
+void setupSharedMemory();
 void deadlockDetection();
 void setupResourceBlocks();
+
+/* Function prototypes for USER */
+void addToQueue(rcb_t *);
+void deleteFromQueue(rcb_t *);
 
 #endif /* Proj5_h */

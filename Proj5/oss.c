@@ -11,8 +11,10 @@ static long long unsigned next_creation_time = 0;
 static int deadLock = 0;
 
 int main(int argc, const char * argv[]) {
-    signal(SIGSEGV, segfaultHandler);
-    signal(SIGINT, interruptHandler);
+    signal(SIGSEGV, signalHandler);
+    signal(SIGINT, signalHandler);
+    signal(SIGALRM, signalHandler);
+    signal(SIGTERM, signalHandler);
     verbose = 0;
     int option, index, terminate_chance = 50;
     char *logfile = "logfile.txt";
@@ -56,7 +58,71 @@ int main(int argc, const char * argv[]) {
         printf("Verbose logfile entries are on.\n");
     sleep(5);
     
+    setupSharedMemory();
     
+    int max_processes = 18, process_count = 0, process_number = 1;
+    char procID[10], process_creation_time[15], logical_run_time[3], term_chance[4]; sprintf(term_chance, "%i", terminate_chance);
+    pid_t wpid, pid;
+    int status, runtime = 25;
+    srand((unsigned)time(NULL));
+    alarm(30);
+    while (*seconds < runtime) {
+        /* sem[20] is the semaphore for time. */
+//        sem_wait(sem);
+        *nano_seconds += rand() % 10000;
+        if (*nano_seconds >= BILLION) {
+            (*seconds)++;
+            *nano_seconds %= BILLION;
+            /* Check for deadlock and take corrective action if necessary. */
+            deadlockDetection();
+        }
+//        sem_post(sem);
+        
+        long long unsigned current_time = *seconds * BILLION + *nano_seconds;
+
+        if (process_count < max_processes && next_creation_time <= current_time) {
+            /* 1ms = 1,000,000ns */
+            /* Processes should create between 1ms and 500ms */
+            next_creation_time = (*seconds * BILLION + *nano_seconds + (1000000 + rand() % 499000001));
+            
+            process_count++;
+            sprintf(procID, "%i", process_number);
+            sprintf(process_creation_time, "%.09f", (double)current_time / BILLION);
+            sprintf(logical_run_time, "%i", runtime);
+            process_number++;
+            pid = fork();
+            if (pid == 0) {
+                execl("./user", procID, process_creation_time, logical_run_time, term_chance, (char *)NULL);
+                printf("Process didn't exec properly.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+        
+        int processID = waitpid(0, NULL, WNOHANG);
+        if (processID > 0) {
+            process_count--;
+        }
+        
+       
+    }
+    
+    /* Wait for all child processes to finish. */
+    while ((wpid = wait(&status)) > 0);
+    
+    sleep(1);
+    printf("Finished waiting\n");
+    
+    detachMemory();
+    return 0;
+}
+
+void printHelpMenu() {
+    printf("'-h' prints this help menu.\n");
+    printf("\"-l fileName\" will assign the argument 'fileName' to the variable 'logfile'.\n");
+    printf("\n");
+}
+
+void setupSharedMemory() {
     /* Create shared memory for time */
     if((time_memory = shmget(MEMORY_KEY, memory_size, IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory. Exiting program...\n");
@@ -99,68 +165,16 @@ int main(int argc, const char * argv[]) {
         perror("parent sem_open");
         exit(1);
     }
-    /* Check if the sem_post succeeded */
-    if (sem_post(sem) == -1)
-        perror("oss sem_post");
     
-    int max_processes = 18, process_count = 0, process_number = 1;
-    char procID[10], process_creation_time[15], logical_run_time[3], term_chance[4]; sprintf(term_chance, "%i", terminate_chance);
-    pid_t wpid, pid;
-    int status, runtime = 25;
-    srand((unsigned)time(NULL));
-    alarm(30);
-    signal(SIGALRM, alarmHandler);
-    while (*seconds < runtime) {
-        *nano_seconds += rand() % 10000;
-        if (*nano_seconds >= BILLION) {
-            (*seconds)++;
-            *nano_seconds %= BILLION;
-            /* Check for deadlock and take corrective action if necessary. */
-            deadlockDetection();
-        }
-        
-        long long unsigned current_time = *seconds * BILLION + *nano_seconds;
-        
-        if (process_count < max_processes && next_creation_time <= current_time) {
-            /* 1ms = 1,000,000ns */
-            /* Processes should create between 1ms and 500ms */
-            next_creation_time = (*seconds * BILLION + *nano_seconds + (1000000 + rand() % 499000001));
-            
-            process_count++;
-            sprintf(procID, "%i", process_number);
-            sprintf(process_creation_time, "%.09f", (double)current_time / BILLION);
-            sprintf(logical_run_time, "%i", runtime);
-            process_number++;
-            pid = fork();
-            if (pid == 0) {
-                execl("./user", procID, process_creation_time, logical_run_time, term_chance, (char *)NULL);
-                printf("Process didn't exec properly.\n");
-                exit(EXIT_FAILURE);
-            }
-        }
-        
-        int processID = waitpid(0, NULL, WNOHANG);
-        if (processID > 0) {
-            process_count--;
-        }
+    
+    /* Check if the sem_post succeeded */
+    int i = 0;
+    for (; i < 20; i++) {
+        if (sem_post(&sem[i]) == -1)
+            perror("oss sem_post");
     }
     
-    /* Wait for all child processes to finish. */
-    while ((wpid = wait(&status)) > 0);
-    
-    sleep(1);
-    printf("Finished waiting\n");
-    
-    detachMemory();
-    return 0;
 }
-
-void printHelpMenu() {
-    printf("'-h' prints this help menu.\n");
-    printf("\"-l fileName\" will assign the argument 'fileName' to the variable 'logfile'.\n");
-    printf("\n");
-}
-
 
 /* Detach from and release all shared memory */
 void detachMemory() {
@@ -178,63 +192,66 @@ void detachMemory() {
     shmdt(nano_seconds);
     shmdt(seconds);
     shmctl(time_memory, IPC_RMID, NULL);
-}
-
-void alarmHandler() {
-    printf("Time has expired!\n");
-    pid_t groupID = getpgrp();
-//    int status;
-    killpg(groupID, SIGALRM);
     
-//    while ((wpid = wait(&status)) > 0);
-    
-    detachMemory();
     exit(0);
 }
 
-void segfaultHandler() {
-    printf("Good job, you created a segmentation fault. Are you proud of yourself? ARE YOU?!\n");
-    
-    /* Send the segmentation fault signal to all child processes. */
-    killpg(getpgrp(), SIGSEGV);
+void signalHandler(int signal_sent) {
+    switch (signal_sent) {
+        case 2:
+            printf("KNOCK ON MY DOOR, KNOCK NEXT TIME! Did you see anything?!\nNo, sir! I didn't see you playing with your processes again!\n");
+            
+            fprintf(stderr, "OSS process %i got interrupted while playing with its processes.\n", getpid());
+            break;
+        case 11:
+            printf("Good job, you created a segmentation fault. Are you proud of yourself? ARE YOU?!\n");
+            fprintf(stderr, "OSS process %i suffered a segmentation fault. It's dead Jim....\n", getpid());
+            break;
+        case 14:
+            printf("Time has expired!\n");
+            break;
+        case 15:
+            fprintf(stderr, "SIGTERM sent\n");
+            break;
+            
+        default:
+            printf("Good job, you sent the impossible signal.\n");
+            break;
+    }
+    sleep(2);
+    killpg(getpgrp(), signal_sent);
     pid_t wpid; int status;
     while ((wpid = wait(&status)) > 0);
     
-    fprintf(stderr, "OSS process %i suffered a segmentation fault. It's dead Jim....\n", getpid());
-    detachMemory();
-}
-
-void interruptHandler() {
-    printf("KNOCK ON MY DOOR, KNOCK NEXT TIME! Did you see anything?!\nNo, sir! I didn't see you playing with your processes again!\n");
-    
-    /* Send the interrupt signal to child processes. */
-    killpg(getpgrp(), SIGINT);
-    pid_t wpid; int status;
-    while ((wpid = wait(&status)) > 0);
-    
-    fprintf(stderr, "OSS process %i got interrupted while playing with its processes\n", getpid());
     detachMemory();
 }
 
 /* Run the deadlock detection algorithm and stop processes if necessary. */
 void deadlockDetection() {
-    if (deadLock < 4) {
-        deadLock++;
+    /* Implement matrix subtraction to determine whether deadlock has occurred. */
+    int consumed[20], allocation[20];
     
-        srand((unsigned)time(NULL));
-        printf("Running deadlock detection...\n");
-        sleep(1);
-        if (verbose) {
-            printf("Writing more stuff to file because verbose statements are turned on.\n");
-        }
-        if (rand() % 2) {
-            printf("Continuing with deadlock\n");
-            deadlockDetection();
-        } else
-            printf("Deadlock detection finished.\n");
-    }
-    deadLock = 0;
+    sem_wait(sem);
+    printf("Running deadlock detection...\n");
+//    if (deadLock < 4) {
+//        deadLock++;
+//    
+//        srand((unsigned)time(NULL));
+//
+//        sleep(1);
+//        if (verbose) {
+//            printf("Writing more stuff to file because verbose statements are turned on.\n");
+//        }
+//        if (rand() % 2) {
+//            printf("Continuing with deadlock\n");
+//            deadlockDetection();
+//        } else
+//
+//    }
+//    deadLock = 0;
+    printf("Deadlock detection finished.\n");
     sleep(2);
+    sem_post(sem);
 }
 
 /* Set up the resources blocks. */
@@ -253,12 +270,12 @@ void setupResourceBlocks() {
         
         /* What I have been told about shareable resources is that a request will always be granted. I'll have to do some additional setup in user so it won't request more than 10 if the resource is shareable. */
         if (RCB_array[i].isShareable) {
-            RCB_array[i].maxResourceCount = 100;
+            RCB_array[i].maxResourceCount = 180;
         } else {
             RCB_array[i].maxResourceCount = 1 + rand() % 10;
         }
 //        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
     }
-    sleep(2);
     printf("And now to continue with your regularly scheduled program\n");
+    sleep(2);
 }

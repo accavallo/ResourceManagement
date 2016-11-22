@@ -9,9 +9,14 @@
 #include "Proj5.h"
 
 int main(int argc, const char * argv[]) {
-    signal(SIGINT, interruptHandler);
-    signal(SIGSEGV, segfaultHandler);
-    signal(SIGALRM, alarmHandler);
+//    signal(SIGINT, interruptHandler);
+//    signal(SIGSEGV, segfaultHandler);
+//    signal(SIGALRM, alarmHandler);
+    
+    signal(SIGINT, signalHandler);
+    signal(SIGSEGV, signalHandler);
+    signal(SIGALRM, signalHandler);
+    signal(SIGTERM, signalHandler);
     
     /* Need another interrupt handler, maybe, for when deadlock detection terminates a process */
     
@@ -61,9 +66,6 @@ int main(int argc, const char * argv[]) {
 
     printf("Hello, from process %3i at time %.09f!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION);
     
-    /* Every process needs to wait its turn... */
-    sem_wait(sem);
-    
     const double CREATION_TIME = atof(argv[1]);
     srand((unsigned)time(NULL));
     double current_time = *seconds + (double)*nano_seconds / BILLION;
@@ -74,7 +76,24 @@ int main(int argc, const char * argv[]) {
     /* In this loop there needs to be some resource requests. */
     //TODO: Determine number of resources to request.
     //TODO: Make resource requests at random times for random resources.
+    //TODO: Set up the random time to request resources. This needs to have a bound attached to it.
     while (continueLoop) {
+        /* Check between 0 and a bound whether this process will request a new resource or release a resource. */
+        if (rand() % 2) {
+            if (sem_wait(sem) == -1)
+                perror("user sem_wait");
+            printf("Resource request made by %i.\n", atoi(argv[0]));
+            sleep(1);
+            if(sem_post(sem) == -1)
+                perror("user sem_post");
+        } else {
+            if (sem_wait(sem) == -1)
+                perror("user sem_wait");
+            printf("Releasing resource from %i.\n", atoi(argv[0]));
+            sleep(1);
+            if(sem_post(sem) == -1)
+                perror("user sem_post");
+        }
         /*Check between 1 ms and 250 ms to determine if the process will finish, after it has been around for at least one second */
         if ((terminate_time + CREATION_TIME) <= current_time) {
             /* Check if this process will terminate */
@@ -84,7 +103,6 @@ int main(int argc, const char * argv[]) {
                 /* Send resources back to the plane from whence they came */
             } else {
                 /* Request resources and set up a new time to either terminate or ask for resources */
-                
                 terminate_time = current_time + (rand() % 250000000) / (double)BILLION;
                 printf("%i trudges on... until at least %.09f\n", atoi(argv[0]), terminate_time);
             }
@@ -96,7 +114,6 @@ int main(int argc, const char * argv[]) {
         current_time = *seconds + (double)*nano_seconds / BILLION;
     }
     
-    sem_post(sem);
     printf("Process %i ending at time %.09f. Last check was at %.09f\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION, terminate_time);
     
     detachMemory();
@@ -104,6 +121,7 @@ int main(int argc, const char * argv[]) {
 }
 
 void detachMemory() {
+    /* Need to go through and release all resources at this point as well. */
     shmdt(RCB_array);
     
     shmdt(seconds);
@@ -111,17 +129,34 @@ void detachMemory() {
     exit(0);
 }
 
-void segfaultHandler() {    
-    fprintf(stderr, "USER process %i suffered a segmentation fault. It's still dead Jim....\n", getpid());
+void signalHandler(int signal_sent) {
+    switch (signal_sent) {
+        case 2:
+            fprintf(stderr, "USER process %i got interrupted while being played with.\n", getpid());
+            break;
+        case 11:
+            fprintf(stderr, "USER process %i suffered a segmentation fault. It's still dead Jim....\n", getpid());
+            break;
+        case 14:
+            fprintf(stderr, "User process %i is being put away because time is up.\n", getpid());
+            break;
+        case 15:
+            fprintf(stderr, "SIGTERM sent\n");
+            break;
+            
+        default:
+            printf("Good job, you sent the impossible signal.\n");
+            break;
+    }
     detachMemory();
 }
 
-void interruptHandler() {
-    fprintf(stderr, "USER process %i got interrupted while being played with.\n", getpid());
-    detachMemory();
+/* Add  */
+void addToQueue(rcb_t *block) {
+    
 }
 
-void alarmHandler() {
-    printf("User process %i is being put away because time is up.\n", getpid());
-    detachMemory();
+/*  */
+void deleteFromQueue(rcb_t *block) {
+    
 }
