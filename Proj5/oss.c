@@ -8,7 +8,9 @@
 
 #include "Proj5.h"
 static long long unsigned next_creation_time = 0;
-static int deadLock = 0;
+//static int deadLock = 0;
+int allocation[20];
+char *logfile = "logfile.txt";
 
 int main(int argc, const char * argv[]) {
     signal(SIGSEGV, signalHandler);
@@ -17,7 +19,6 @@ int main(int argc, const char * argv[]) {
     signal(SIGTERM, signalHandler);
     verbose = 0;
     int option, index, terminate_chance = 50;
-    char *logfile = "logfile.txt";
     
     while ((option = getopt(argc, (char **)argv, "hvl:t:")) != -1) {
         switch (option) {
@@ -56,8 +57,9 @@ int main(int argc, const char * argv[]) {
     printf("Terminate chance: %i%%\n", terminate_chance);
     if (verbose)
         printf("Verbose logfile entries are on.\n");
-    sleep(5);
+    sleep(2);
     
+    /* I just felt like putting this in a separate method so it clears up main a little bit. */
     setupSharedMemory();
     
     int max_processes = 18, process_count = 0, process_number = 1;
@@ -65,10 +67,8 @@ int main(int argc, const char * argv[]) {
     pid_t wpid, pid;
     int status, runtime = 25;
     srand((unsigned)time(NULL));
-    alarm(30);
+    alarm(60);
     while (*seconds < runtime) {
-        /* sem[20] is the semaphore for time. */
-//        sem_wait(sem);
         *nano_seconds += rand() % 10000;
         if (*nano_seconds >= BILLION) {
             (*seconds)++;
@@ -76,7 +76,6 @@ int main(int argc, const char * argv[]) {
             /* Check for deadlock and take corrective action if necessary. */
             deadlockDetection();
         }
-//        sem_post(sem);
         
         long long unsigned current_time = *seconds * BILLION + *nano_seconds;
 
@@ -102,8 +101,6 @@ int main(int argc, const char * argv[]) {
         if (processID > 0) {
             process_count--;
         }
-        
-       
     }
     
     /* Wait for all child processes to finish. */
@@ -141,12 +138,11 @@ void setupSharedMemory() {
     *nano_seconds = 0;
     
     /* Create shared memory for the resource control blocks */
-    if((resource_memory = shmget(RESOURCE_KEY, sizeof(rcb_t) * 20,  IPC_CREAT | 0777)) == -1) {
+    if ((resource_memory = shmget(RESOURCE_KEY, sizeof(rcb_t) * 20,  IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory for the resource control blocks. Exiting program...\n");
         perror("OSS shmget rcb:");
         exit(1);
     }
-    
     
     if ((RCB_array = shmat(resource_memory, NULL, 0)) == NULL) {
         printf("OSS failed to attach to resource memory. Exiting program...\n");
@@ -154,26 +150,29 @@ void setupSharedMemory() {
         exit(1);
     }
     
+    if ((vector_memory = shmget(VECTOR_KEY, sizeof(int) * 20, IPC_CREAT | 0777)) == -1) {
+        printf("OSS failed to create shared memory for the resource vector. Exiting program...\n");
+        perror("OSS shmget vector:");
+        exit(1);
+    }
+    
+    if ((resourceVector = shmat(vector_memory, NULL, 0)) == NULL) {
+        printf("OSS failed to attach to the resource vector. Exiting program...\n");
+        perror("OSS shmat vector memory:");
+        exit(1);
+    }
+    
     /* Set up initial resources for the resource control blocks */
     setupResourceBlocks();
     
     /* Create a named semaphore */
-    sem = sem_open("/mySem", O_CREAT, 0777, 1);
+    resource_sem = sem_open("/mySem", O_CREAT, 0777, 1);
     /* Check if the semaphore created correctly */
-    if(sem == SEM_FAILED) {
+    if(resource_sem == SEM_FAILED) {
         printf("Semaphore failed to create. Exiting program...\n");
         perror("parent sem_open");
         exit(1);
     }
-    
-    
-    /* Check if the sem_post succeeded */
-    int i = 0;
-    for (; i < 20; i++) {
-        if (sem_post(&sem[i]) == -1)
-            perror("oss sem_post");
-    }
-    
 }
 
 /* Detach from and release all shared memory */
@@ -182,7 +181,7 @@ void detachMemory() {
     
     /* Unlink and close the semaphore. Unlink ONLY happens here, not in child processes. */
     sem_unlink("/mySem");
-    sem_close(sem);
+    sem_close(resource_sem);
     
     /* Detach and release the memory for the resource blocks */
     shmdt(RCB_array);
@@ -229,29 +228,36 @@ void signalHandler(int signal_sent) {
 /* Run the deadlock detection algorithm and stop processes if necessary. */
 void deadlockDetection() {
     /* Implement matrix subtraction to determine whether deadlock has occurred. */
-    int consumed[20], allocation[20];
+    int claim[20], available[20];
+    /* allocation[] */
+    /* claim - allocation = available */
+    /* Need to figure out a way to get the claim from each process. */
+    int i = 0;
+    for (; i < 20; i++) {
+        available[i] = claim[i] - allocation[i];
+    }
     
-    sem_wait(sem);
+    sem_wait(resource_sem);
     printf("Running deadlock detection...\n");
-//    if (deadLock < 4) {
-//        deadLock++;
-//    
-//        srand((unsigned)time(NULL));
-//
-//        sleep(1);
-//        if (verbose) {
-//            printf("Writing more stuff to file because verbose statements are turned on.\n");
-//        }
-//        if (rand() % 2) {
-//            printf("Continuing with deadlock\n");
-//            deadlockDetection();
-//        } else
-//
-//    }
-//    deadLock = 0;
+    /* Run deadlock detection */
+    FILE *file;
+    file=fopen(logfile, "a");
+    if (file == NULL) {
+        printf("Failed to open file, exiting program.\n");
+        errno = ENOENT;
+        signalHandler(SIGSEGV);
+        exit(1);
+    }
+    fprintf(file, "\n");
+    
+    if (verbose) {
+        printf("Writing more stuff to file because verbose statements are turned on.\n");
+    }
+    fclose(file);
+    
     printf("Deadlock detection finished.\n");
     sleep(2);
-    sem_post(sem);
+    sem_post(resource_sem);
 }
 
 /* Set up the resources blocks. */
@@ -274,7 +280,8 @@ void setupResourceBlocks() {
         } else {
             RCB_array[i].maxResourceCount = 1 + rand() % 10;
         }
-//        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
+        allocation[i] = RCB_array[i].maxResourceCount;
+        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
     }
     printf("And now to continue with your regularly scheduled program\n");
     sleep(2);

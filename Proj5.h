@@ -31,6 +31,7 @@
 
 #define MEMORY_KEY 18137644
 #define RESOURCE_KEY 44673181
+#define VECTOR_KEY 13761844
 #define BILLION 1000000000L
 
 /* Struct for resources */
@@ -51,11 +52,10 @@ rcb_t *RCB_array;
 
 /* Global variables for all */
 int memory_size = sizeof(long long unsigned) * 3;
-int time_memory, resource_memory;
-long long unsigned *seconds;
-long long unsigned *nano_seconds;
+int time_memory, resource_memory, vector_memory, *resourceVector;
+long long unsigned *seconds, *nano_seconds;
 
-sem_t *sem;
+sem_t *resource_sem;
 
 
 /* Global variables for OSS */
@@ -83,6 +83,6 @@ void setupResourceBlocks();
 
 /* Function prototypes for USER */
 void addToQueue(rcb_t *);
-void deleteFromQueue(rcb_t *);
+void deleteFromQueue(rcb_t *, int);
 
 #endif /* Proj5_h */
