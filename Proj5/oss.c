@@ -162,6 +162,18 @@ void setupSharedMemory() {
         exit(1);
     }
     
+    if ((queue_memory = shmget(QUEUE_KEY, sizeof(int) * 360, IPC_CREAT | 0777)) == -1) {
+        printf("OSS failed to create shared memory for the resource queue. Exiting program...\n");
+        perror("OSS shmget queue memory:");
+        exit(1);
+    }
+    
+    if ((resourceQueue = shmat(queue_memory, NULL, 0)) == NULL) {
+        printf("OSS failed to attach to the resource queue. Exiting program...\n");
+        perror("OSS shmat queue memory:");
+        exit(1);
+    }
+    
     /* Set up initial resources for the resource control blocks */
     setupResourceBlocks();
     
@@ -186,6 +198,14 @@ void detachMemory() {
     /* Detach and release the memory for the resource blocks */
     shmdt(RCB_array);
     shmctl(resource_memory, IPC_RMID, NULL);
+    
+    /* Detach and release the memory for the resource vector */
+    shmdt(resourceVector);
+    shmctl(vector_memory, IPC_RMID, NULL);
+    
+    /* Detach and release the memory for the resource queue */
+    shmdt(resourceQueue);
+    shmctl(queue_memory, IPC_RMID, NULL);
     
     /* Detach and release the memory for time */
     shmdt(nano_seconds);
@@ -232,13 +252,14 @@ void deadlockDetection() {
     /* allocation[] */
     /* claim - allocation = available */
     /* Need to figure out a way to get the claim from each process. */
+    sem_wait(resource_sem);
+    printf("Running deadlock detection...\n");
     int i = 0;
     for (; i < 20; i++) {
         available[i] = claim[i] - allocation[i];
+        printQueue(i);
     }
     
-    sem_wait(resource_sem);
-    printf("Running deadlock detection...\n");
     /* Run deadlock detection */
     FILE *file;
     file=fopen(logfile, "a");
@@ -281,8 +302,21 @@ void setupResourceBlocks() {
             RCB_array[i].maxResourceCount = 1 + rand() % 10;
         }
         allocation[i] = RCB_array[i].maxResourceCount;
-        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
+//        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
     }
     printf("And now to continue with your regularly scheduled program\n");
     sleep(2);
+}
+
+void printQueue(int index) {
+    printf("Queue %i\n", index);
+    int i;
+    for (i = 0; i < 18; i++) {
+        if (resourceQueue[index * 20 + i] == 0)
+            break;
+        else
+            printf("%i -> ", resourceQueue[index * 20 + i]);
+    }
+    if (i > 0)
+        printf("\n");
 }

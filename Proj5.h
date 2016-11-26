@@ -32,6 +32,7 @@
 #define MEMORY_KEY 18137644
 #define RESOURCE_KEY 44673181
 #define VECTOR_KEY 13761844
+#define QUEUE_KEY 18441376
 #define BILLION 1000000000L
 
 /* Struct for resources */
@@ -45,14 +46,14 @@ typedef struct resource_control_block {
     bool isShareable;               /* Will either be true or false */
     int maxResourceCount;           /* The total number of resources for requesting purposes */
     int currentResourceCount;       /* The current number of resources */
-    rscq_t *head;                   /* Shows where resources are allocated */
-    rscq_t *tail;                   /* Will be used for deadlock. The last resource in the queue will always be the one to go. */
+//    rscq_t *head;                   /* Shows where resources are allocated */
+//    rscq_t *tail;                   /* Will be used for deadlock. The last resource in the queue will always be the one to go. */
 } rcb_t;
 rcb_t *RCB_array;
 
 /* Global variables for all */
 int memory_size = sizeof(long long unsigned) * 3;
-int time_memory, resource_memory, vector_memory, *resourceVector;
+int time_memory, resource_memory, vector_memory, queue_memory, *resourceVector, *resourceQueue;
 long long unsigned *seconds, *nano_seconds;
 
 sem_t *resource_sem;
@@ -74,6 +75,7 @@ void alarmHandler();
 void segfaultHandler();
 void interruptHandler();
 void signalHandler(int);
+void printQueue(int);
 
 /* Function prototypes for OSS */
 void printHelpMenu();
@@ -82,7 +84,7 @@ void deadlockDetection();
 void setupResourceBlocks();
 
 /* Function prototypes for USER */
-void addToQueue(rcb_t *);
-void deleteFromQueue(rcb_t *, int);
+void addToQueue(int);
+void deleteFromQueue(int);
 
 #endif /* Proj5_h */
