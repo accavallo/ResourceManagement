@@ -52,9 +52,9 @@ typedef struct resource_control_block {
 rcb_t *RCB_array;
 
 /* Global variables for all */
-int memory_size = sizeof(long long unsigned) * 3;
+int memory_size = sizeof(long long unsigned) * 22;
 int time_memory, resource_memory, vector_memory, queue_memory, *resourceVector, *resourceQueue;
-long long unsigned *seconds, *nano_seconds;
+long long unsigned *seconds, *nano_seconds, *claim;
 
 sem_t *resource_sem;
 

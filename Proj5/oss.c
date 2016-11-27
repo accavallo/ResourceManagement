@@ -9,7 +9,7 @@
 #include "Proj5.h"
 static long long unsigned next_creation_time = 0;
 //static int deadLock = 0;
-int allocation[20];
+//int allocation[20];
 char *logfile = "logfile.txt";
 
 int main(int argc, const char * argv[]) {
@@ -62,12 +62,13 @@ int main(int argc, const char * argv[]) {
     /* I just felt like putting this in a separate method so it clears up main a little bit. */
     setupSharedMemory();
     
+    //MARK: Process creation while loop
     int max_processes = 18, process_count = 0, process_number = 1;
     char procID[10], process_creation_time[15], logical_run_time[3], term_chance[4]; sprintf(term_chance, "%i", terminate_chance);
     pid_t wpid, pid;
     int status, runtime = 25;
     srand((unsigned)time(NULL));
-    alarm(60);
+    alarm(90);
     while (*seconds < runtime) {
         *nano_seconds += rand() % 10000;
         if (*nano_seconds >= BILLION) {
@@ -113,12 +114,16 @@ int main(int argc, const char * argv[]) {
     return 0;
 }
 
+//MARK: Print Help Menu
 void printHelpMenu() {
     printf("'-h' prints this help menu.\n");
+    printf("'-v' turns verbose logfile entries on.\n");
     printf("\"-l fileName\" will assign the argument 'fileName' to the variable 'logfile'.\n");
+    printf("'-t' time will assign the argument in time to the variable t.\n\tThis will be the terminate chance. Default is set to 50%%.\n");
     printf("\n");
 }
 
+//MARK: Setup Shared Memory
 void setupSharedMemory() {
     /* Create shared memory for time */
     if((time_memory = shmget(MEMORY_KEY, memory_size, IPC_CREAT | 0777)) == -1) {
@@ -134,6 +139,7 @@ void setupSharedMemory() {
         exit(1);
     }
     nano_seconds = seconds + 1;
+    claim = seconds + 2;
     *seconds = 0;
     *nano_seconds = 0;
     
@@ -188,6 +194,7 @@ void setupSharedMemory() {
 }
 
 /* Detach from and release all shared memory */
+//MARK: Detach Memory
 void detachMemory() {
     printf("Time on deck: %.09f seconds.\n", *seconds + (double)*nano_seconds / BILLION);
     
@@ -210,11 +217,13 @@ void detachMemory() {
     /* Detach and release the memory for time */
     shmdt(nano_seconds);
     shmdt(seconds);
+    shmdt(claim);
     shmctl(time_memory, IPC_RMID, NULL);
     
     exit(0);
 }
 
+//MARK: Signal Handler
 void signalHandler(int signal_sent) {
     switch (signal_sent) {
         case 2:
@@ -246,21 +255,30 @@ void signalHandler(int signal_sent) {
 }
 
 /* Run the deadlock detection algorithm and stop processes if necessary. */
+//MARK: Deadlock Detection
 void deadlockDetection() {
     /* Implement matrix subtraction to determine whether deadlock has occurred. */
-    int claim[20], available[20];
+    int available[20] = {0};
     /* allocation[] */
     /* claim - allocation = available */
     /* Need to figure out a way to get the claim from each process. */
     sem_wait(resource_sem);
+    /* Run deadlock detection */
     printf("Running deadlock detection...\n");
-    int i = 0;
-    for (; i < 20; i++) {
-        available[i] = claim[i] - allocation[i];
+    int i;
+    /* Figure out what the total claim is. */
+    
+    /* Determine what the available resources are. */
+    for (i = 0; i < 20; i++) {
+        available[i] = RCB_array[i].maxResourceCount - claim[i];
+        
         printQueue(i);
+        /* Whenever this number is negative it means that we have processes waiting for resources. */
+        printf("available[%i]: %i\n", i, available[i]);
+        sleep(1);
     }
     
-    /* Run deadlock detection */
+    /* Write to files if necessary. */
     FILE *file;
     file=fopen(logfile, "a");
     if (file == NULL) {
@@ -282,6 +300,7 @@ void deadlockDetection() {
 }
 
 /* Set up the resources blocks. */
+//MARK: Setup Resource Blocks
 void setupResourceBlocks() {
     printf("Setting up resource blocks...\n");
     srand((unsigned)time(NULL));
@@ -301,13 +320,15 @@ void setupResourceBlocks() {
         } else {
             RCB_array[i].maxResourceCount = 1 + rand() % 10;
         }
-        allocation[i] = RCB_array[i].maxResourceCount;
+        RCB_array[i].currentResourceCount = RCB_array[i].maxResourceCount;
+//        allocation[i] = RCB_array[i].currentResourceCount;
 //        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
     }
     printf("And now to continue with your regularly scheduled program\n");
     sleep(2);
 }
 
+//MARK: Print Queue
 void printQueue(int index) {
     printf("Queue %i\n", index);
     int i;

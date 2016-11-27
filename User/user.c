@@ -7,20 +7,13 @@
 //
 
 #include "Proj5.h"
-int resources[20] = {0};
+int resources[20] = {0}; /* Used to keep track of this process' resource claims */
 
 int main(int argc, const char * argv[]) {
-//    signal(SIGINT, interruptHandler);
-//    signal(SIGSEGV, segfaultHandler);
-//    signal(SIGALRM, alarmHandler);
-    
     signal(SIGINT, signalHandler);
     signal(SIGSEGV, signalHandler);
     signal(SIGALRM, signalHandler);
     signal(SIGTERM, signalHandler);
-    
-    /* Need another interrupt handler, maybe, for when deadlock detection terminates a process */
-    
     /***********
      argv[0] is the process ID as given by oss.
      argv[1] is the creation time of the process.
@@ -43,6 +36,7 @@ int main(int argc, const char * argv[]) {
         exit(1);
     }
     nano_seconds = seconds + 1;
+    claim = seconds + 2;
     
     /* Get shared memory for the reource control blocks */
     if((resource_memory = shmget(RESOURCE_KEY, sizeof(rcb_t) * 20, 0777)) == -1) {
@@ -103,12 +97,13 @@ int main(int argc, const char * argv[]) {
     while (continueLoop) {
         if (hasPendingClaim) {
             /* Keep checking the resource for the claim */
-            printf("%i checking on pending claim...\n", atoi(argv[0]));
+            printf("%i checking on pending claim for resource %i...\n", atoi(argv[0]), resource_to_claim);
             sem_wait(resource_sem);
             if (amount_to_claim - amount_claimed <= RCB_array[resource_to_claim].currentResourceCount) {
                 hasPendingClaim = false;
                 RCB_array[resource_to_claim].currentResourceCount -= (amount_to_claim - amount_claimed);
                 resources[resource_to_claim] += (amount_to_claim - amount_claimed);
+                claim[resource_to_claim] += (amount_to_claim - amount_claimed);
             }
             sem_post(resource_sem);
         } else {
@@ -117,24 +112,33 @@ int main(int argc, const char * argv[]) {
                 sem_wait(resource_sem);
 //                    perror("user sem_wait");
                 /* Request resource */
-                resource_to_claim = rand() % getpid() % 20;
+                resource_to_claim = (rand() % getpid()) % 20;
                 if (RCB_array[resource_to_claim].maxResourceCount > 10) {
                     amount_to_claim = 1 + rand() % 10;
                 } else {
-                    amount_to_claim = 1 + rand() % RCB_array[resource_to_claim].maxResourceCount;
+                    amount_to_claim = 1 + (rand() % getpid()) % RCB_array[resource_to_claim].maxResourceCount;
                 }
                 printf("%i is requesting %i from resource %i.\n", atoi(argv[0]), amount_to_claim, resource_to_claim);
                 sleep(1);
                 /* Take the resources requested or up to the amount remaining */
                 if (RCB_array[resource_to_claim].currentResourceCount < amount_to_claim) {
                     amount_claimed = RCB_array[resource_to_claim].currentResourceCount;
-                    RCB_array[resource_to_claim].currentResourceCount -= amount_claimed;
+//                    RCB_array[resource_to_claim].currentResourceCount -= amount_claimed;
                     hasPendingClaim = true;
+                    
                 } else {
-                    RCB_array[resource_to_claim].currentResourceCount -= amount_to_claim;
+                    amount_claimed = amount_to_claim;
+//                    RCB_array[resource_to_claim].currentResourceCount -= amount_to_claim;
+//                    resources[resource_to_claim] = amount_to_claim;
+//                    claim[resource_to_claim] += amount_to_claim;
                 }
-                resources[resource_to_claim] = amount_claimed;
+                /* Claim the resources that are allowed to be claimed. Whether all that it wants or what is left. */
+                RCB_array[resource_to_claim].currentResourceCount -= amount_claimed;    //Subtract what was available.
+                resources[resource_to_claim] = amount_claimed;  //This process keeps track of what it has actually claimed.
+                claim[resource_to_claim] += amount_to_claim;    //Keep track of how much this process wants to claim.
                 differnt_resources_claimed++;
+//                printf("Process %i: claim[%i] = %llu\tamount_to_claim: %i\tamount_claimed: %i\n", atoi(argv[0]), resource_to_claim, claim[resource_to_claim], amount_to_claim, amount_claimed);
+//                printf("Process %i: resources[%i]: %i\n", atoi(argv[0]), resource_to_claim, resources[resource_to_claim]);
                 addToQueue(resource_to_claim);
                 sleep(1);
                 sem_post(resource_sem);
@@ -148,6 +152,7 @@ int main(int argc, const char * argv[]) {
                     for (; i < 20; i++) {
                         if (resources[i] > 0) {
                             RCB_array[i].currentResourceCount += resources[i];
+                            claim[i] -= resources[i];
                             resources[i] = 0;
                             deleteFromQueue(i);
                             break;
@@ -180,7 +185,7 @@ int main(int argc, const char * argv[]) {
         
         /* Update the current time */
         current_time = *seconds + (double)*nano_seconds / BILLION;
-    }
+    } /* End while loop */
     
     printf("Process %i ending at time %.09f. Last check was at %.09f\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION, terminate_time);
     
@@ -201,6 +206,7 @@ void detachMemory() {
     shmdt(resourceQueue);
     shmdt(seconds);
     shmdt(nano_seconds);
+    shmdt(claim);
     exit(0);
 }
 
