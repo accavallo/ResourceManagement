@@ -77,7 +77,7 @@ int main(int argc, const char * argv[]) {
                     fprintf(file, "%i is requesting %i from resource %i.\n", processID, amount_to_claim, resource_to_claim);
                 
                 fclose(file);
-                sleep(1);
+//                sleep(1);
                 /* Take the resources requested or up to the amount remaining */
                 if (RCB_array[resource_to_claim].currentResourceCount < amount_to_claim) {
                     amount_claimed = RCB_array[resource_to_claim].currentResourceCount;
@@ -100,7 +100,7 @@ int main(int argc, const char * argv[]) {
 //                printf("Process %i: resources[%i]: %i\n", processID, resource_to_claim, resources[resource_to_claim]);
                 addToQueue(resource_to_claim);
 //                myStats->cpu_utilization += (*seconds + (double)*nano_seconds / BILLION - idle_time);
-                sleep(1);
+//                sleep(1);
                 sem_post(resource_sem);
 //                    perror("user sem_post");
             } else {
@@ -135,7 +135,7 @@ int main(int argc, const char * argv[]) {
                     different_resources_claimed--;
                 }
 //                myStats->cpu_utilization += (*seconds + (double)*nano_seconds / BILLION - idle_time);
-                sleep(1);
+//                sleep(1);
                 sem_post(resource_sem);
 //                    perror("user sem_post");
             }

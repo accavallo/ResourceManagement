@@ -333,7 +333,7 @@ void deadlockDetection() {
             /* Whenever this number is negative it means that we have processes waiting for resources. */
             printf("available[%i]: %i\n", i, available[i]);
         }   /* For loop to determine if a deadlock has occurred. */
-        sleep(2);
+//        sleep(2);
         /* Write to files if necessary. */
         if (deadlock_occurred) {
             FILE *file;
@@ -352,7 +352,7 @@ void deadlockDetection() {
                     fprintf(file, "Killing process %i\n", resourceQueue[i*20]);
                     kill(resourceQueue[i * 20], SIGTERM);
                     deadlockedResources[i] = false;
-                    sleep(1);
+//                    sleep(1);
                 }
             }
             fclose(file);
