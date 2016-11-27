@@ -7,9 +7,6 @@
 //
 
 #include "Proj5.h"
-//resources[i][0] will be the number of resources currently claimed. resources[i][1] will be the number of resources desired to be claimed.
-int resources[20][2] = {0}; /* Used to keep track of this process' resource claims */
-int processID;
 
 int main(int argc, const char * argv[]) {
     signal(SIGINT, signalHandler);
@@ -21,70 +18,15 @@ int main(int argc, const char * argv[]) {
      argv[1] is the creation time of the process.
      argv[2] is the logical run time for oss.
      argv[3] is the chance that the child process will terminate.
+     argv[4] is whether verbose log entries are on or off.
+     argv[5] is the logfile to be written to.
      ***********/
     
     int terminate_chance = atoi(argv[3]);
     processID = atoi(argv[0]);
-    /* Get shared memory for time */
-    if((time_memory = shmget(MEMORY_KEY, memory_size, 0777)) == -1) {
-        printf("User %i (process %i) failed to get shared memory. Exiting program...\n", processID, getpid());
-        perror("User shmget time memory:");
-        exit(1);
-    }
+    verbose = atoi(argv[4]);
     
-    /* Attach to shared memory */
-    if ((seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
-        printf("User %i (process %i) failed to attach to shared memory. Exiting program...\n", processID, getpid());
-        perror("User shmat time memory:");
-        exit(1);
-    }
-    nano_seconds = seconds + 1;
-    claim = seconds + 2;
-    
-    /* Get shared memory for the reource control blocks */
-    if((resource_memory = shmget(RESOURCE_KEY, sizeof(rcb_t) * 20, 0777)) == -1) {
-        printf("\n");
-        perror("");
-        exit(1);
-    }
-    /* Attach to the resource control blocks */
-    if ((RCB_array = shmat(resource_memory, NULL, 0)) == NULL) {
-        printf("\n");
-        perror("");
-        exit(1);
-    }
-    
-    if ((vector_memory = shmget(VECTOR_KEY, sizeof(int) * 20, 0777)) == -1) {
-        printf("User %i failed to create shared memory for the resource vector. Exiting program...\n", processID);
-        perror("User shmget vector:");
-        exit(1);
-    }
-    
-    if ((resourceVector = shmat(vector_memory, NULL, 0)) == NULL) {
-        printf("User %i failed to attach to the resource vector. Exiting program...\n", processID);
-        perror("User shmat vector memory:");
-        exit(1);
-    }
-    
-    /* Open the named semaphore since sem_init() is deprecated... */
-    resource_sem = sem_open("/mySem", 0);
-    if (resource_sem == SEM_FAILED) {
-        perror("User sem_open");
-        printf("User %i failed to open semaphore. Exiting program...\n", processID);
-        exit(1);
-    }
-    
-    if ((queue_memory = shmget(QUEUE_KEY, sizeof(int) * 360, 0777)) == -1) {
-        printf("User %i failed to create shared memory for the resource queue. Exiting program...\n", processID);
-        perror("User shmget queue memory:");
-        exit(1);
-    }
-    
-    if ((resourceQueue = shmat(queue_memory, NULL, 0)) == NULL) {
-        printf("User %i failed to attach to the resource queue. Exiting program...\n", processID);
-        perror("User shmat queue memory:");
-        exit(1);
-    }
+    setupSharedMemory();
 
 //    printf("Hello, from process %3i at time %.09f!\n", processID, *seconds + (double)*nano_seconds / BILLION);
     
@@ -92,10 +34,10 @@ int main(int argc, const char * argv[]) {
     srand((unsigned)time(NULL));
     double current_time = *seconds + (double)*nano_seconds / BILLION;
     /* Set the first terminate check for at least 1 second after it has been around */
-    double terminate_time = current_time + 1 + (rand() % 250000000) / (double)BILLION;
+    double terminate_time = current_time + 1 + (rand() % 250000000) / (double)BILLION, idle_time;
     printf("First terminate time check for %i is set to %.09f.\n", processID, terminate_time + CREATION_TIME);
     bool hasPendingClaim = false, continueLoop = true;
-    int amount_to_claim = 0, amount_claimed = 0, resource_to_claim = 0, differnt_resources_claimed = 0;
+    int amount_to_claim = 0, amount_claimed = 0, resource_to_claim = 0, different_resources_claimed = 0;
     /* In this loop there needs to be some resource requests. */
     while (continueLoop) {
         if (hasPendingClaim) {
@@ -108,11 +50,13 @@ int main(int argc, const char * argv[]) {
                 resources[resource_to_claim][0] += (amount_to_claim - amount_claimed);
                 claim[resource_to_claim] += (amount_to_claim - amount_claimed);
             }
+            myStats->cpu_utilization += (*seconds + (double)*nano_seconds / BILLION - current_time);
             sem_post(resource_sem);
         } else {
             /* Check between 0 and a bound whether this process will request a new resource or release a resource. */
             if (rand() % 2) {
                 sem_wait(resource_sem);
+                idle_time = *seconds + (double)*nano_seconds / BILLION;
 //                    perror("user sem_wait");
                 /* Request resource */
                 resource_to_claim = (rand() % getpid()) % 20;
@@ -121,7 +65,16 @@ int main(int argc, const char * argv[]) {
                 } else {
                     amount_to_claim = 1 + (rand() % getpid()) % RCB_array[resource_to_claim].maxResourceCount;
                 }
-                printf("%i is requesting %i from resource %i.\n", processID, amount_to_claim, resource_to_claim);
+                FILE *file;
+                file=fopen(argv[5], "a");
+                if (file == NULL) {
+                    fprintf(stderr, "Failed to open file, exiting program.\n");
+                    errno = ENOENT;
+                    signalHandler(SIGSEGV);
+                    exit(1);
+                }
+                fprintf(file, "%i is requesting %i from resource %i.\n", processID, amount_to_claim, resource_to_claim);
+                fclose(file);
                 sleep(1);
                 /* Take the resources requested or up to the amount remaining */
                 if (RCB_array[resource_to_claim].currentResourceCount < amount_to_claim) {
@@ -140,10 +93,11 @@ int main(int argc, const char * argv[]) {
                 resources[resource_to_claim][0] = amount_claimed;  //This process keeps track of what it has actually claimed.
                 resources[resource_to_claim][1] = amount_to_claim;
                 claim[resource_to_claim] += amount_to_claim;    //Keep track of how much this process wants to claim.
-                differnt_resources_claimed++;
+                different_resources_claimed++;
 //                printf("Process %i: claim[%i] = %llu\tamount_to_claim: %i\tamount_claimed: %i\n", processID, resource_to_claim, claim[resource_to_claim], amount_to_claim, amount_claimed);
 //                printf("Process %i: resources[%i]: %i\n", processID, resource_to_claim, resources[resource_to_claim]);
                 addToQueue(resource_to_claim);
+//                myStats->cpu_utilization += (*seconds + (double)*nano_seconds / BILLION - idle_time);
                 sleep(1);
                 sem_post(resource_sem);
 //                    perror("user sem_post");
@@ -151,10 +105,22 @@ int main(int argc, const char * argv[]) {
                 sem_wait(resource_sem);
 //                    perror("user sem_wait");
                 /* Release resource */
-                if (differnt_resources_claimed > 0) {
-                    int i = 0;
-                    for (; i < 20; i++) {
+                idle_time = *seconds + (double)*nano_seconds / BILLION;
+                if (different_resources_claimed > 0) {
+                    int i;
+                    for (i = 0; i < 20; i++) {
                         if (resources[i] > 0) {
+                            FILE *file;
+                            file=fopen(argv[5], "a");
+                            if (file == NULL) {
+                                fprintf(stderr, "Failed to open file, exiting program.\n");
+                                errno = ENOENT;
+                                signalHandler(SIGSEGV);
+                                exit(1);
+                            }
+                            fprintf(file, "%i releasing resource from %i.\n", processID, i);
+                            fclose(file);
+                            
                             RCB_array[i].currentResourceCount += resources[i][0];
                             claim[i] -= resources[i][1];
                             resources[i][0] = 0, resources[i][1] = 0;
@@ -162,10 +128,9 @@ int main(int argc, const char * argv[]) {
                             break;
                         }
                     }
-                    printf("%i releasing resource from %i.\n", processID, i);
-                    differnt_resources_claimed--;
+                    different_resources_claimed--;
                 }
-                
+//                myStats->cpu_utilization += (*seconds + (double)*nano_seconds / BILLION - idle_time);
                 sleep(1);
                 sem_post(resource_sem);
 //                    perror("user sem_post");
@@ -192,9 +157,87 @@ int main(int argc, const char * argv[]) {
     } /* End while loop */
     
     printf("Process %i ending at time %.09f. Last check was at %.09f\n", processID, *seconds + (double)*nano_seconds / BILLION, terminate_time);
-    
+    myStats->turnaround_time += (*seconds + (double)*nano_seconds / BILLION - CREATION_TIME);
     detachMemory();
     return 0;
+}
+
+void setupSharedMemory() {
+    /* Get shared memory for time */
+    if((time_memory = shmget(MEMORY_KEY, memory_size, 0777)) == -1) {
+        printf("User %i (process %i) failed to get shared memory. Exiting program...\n", processID, getpid());
+        perror("User shmget time memory:");
+        exit(1);
+    }
+    
+    /* Attach to shared memory */
+    if ((seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
+        printf("User %i (process %i) failed to attach to shared memory. Exiting program...\n", processID, getpid());
+        perror("User shmat time memory:");
+        exit(1);
+    }
+    nano_seconds = seconds + 1;
+    claim = seconds + 2;
+    
+    /* Get shared memory for the reource control blocks */
+    if((resource_memory = shmget(RESOURCE_KEY, sizeof(rcb_t) * 20, 0777)) == -1) {
+        printf("User %i failed to create resource memory. Exiting program...\n", processID);
+        perror("User shmget resource memory:");
+        exit(1);
+    }
+    /* Attach to the resource control blocks */
+    if ((RCB_array = shmat(resource_memory, NULL, 0)) == NULL) {
+        printf("User %i failed to attach to resource memory. Exiting program...\n", processID);
+        perror("User shmat resource memory:");
+        exit(1);
+    }
+    
+    /* Create the shared memory for the statistics */
+    if ((stats_memory = shmget(STATS_KEY, sizeof(stats_t), 0777)) == -1) {
+        printf("User %i failed to attach to resource memory. Exiting program...\n", processID);
+        perror("User shmget stats memory:");
+        exit(1);
+    }
+    
+    if ((myStats = shmat(stats_memory, NULL, 0)) == NULL) {
+        printf("User failed to attach to statistics memory. Exiting program...\n");
+        perror("User shmat statistics memory:");
+        exit(1);
+    }
+    
+    /*
+    if ((vector_memory = shmget(VECTOR_KEY, sizeof(int) * 20, 0777)) == -1) {
+        printf("User %i failed to create shared memory for the resource vector. Exiting program...\n", processID);
+        perror("User shmget vector:");
+        exit(1);
+    }
+    
+    if ((resourceVector = shmat(vector_memory, NULL, 0)) == NULL) {
+        printf("User %i failed to attach to the resource vector. Exiting program...\n", processID);
+        perror("User shmat vector memory:");
+        exit(1);
+    }
+     */
+    
+    /* Open the named semaphore since sem_init() is deprecated... */
+    resource_sem = sem_open("/mySem", 0);
+    if (resource_sem == SEM_FAILED) {
+        perror("User sem_open");
+        printf("User %i failed to open semaphore. Exiting program...\n", processID);
+        exit(1);
+    }
+    
+    if ((queue_memory = shmget(QUEUE_KEY, sizeof(int) * 360, 0777)) == -1) {
+        printf("User %i failed to create shared memory for the resource queue. Exiting program...\n", processID);
+        perror("User shmget queue memory:");
+        exit(1);
+    }
+    
+    if ((resourceQueue = shmat(queue_memory, NULL, 0)) == NULL) {
+        printf("User %i failed to attach to the resource queue. Exiting program...\n", processID);
+        perror("User shmat queue memory:");
+        exit(1);
+    }
 }
 
 void detachMemory() {
@@ -205,8 +248,8 @@ void detachMemory() {
         deleteFromQueue(i);
     }
     
+    shmdt(myStats);
     shmdt(RCB_array);
-    shmdt(resourceVector);
     shmdt(resourceQueue);
     shmdt(seconds);
     shmdt(nano_seconds);
@@ -239,7 +282,7 @@ void signalHandler(int signal_sent) {
 
 /* Add this process to the correct queue */
 void addToQueue(int index) {
-    printf("Adding to queue %i\n", index);
+    printf("Adding %i to queue %i\n", processID, index);
     int i = 0;
     for (; i < 18; i++) {
         if (resourceQueue[index * 20 + i] == 0) {

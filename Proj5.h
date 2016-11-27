@@ -31,8 +31,9 @@
 
 #define MEMORY_KEY 18137644
 #define RESOURCE_KEY 44673181
-#define VECTOR_KEY 13761844
+//#define VECTOR_KEY 13761844
 #define QUEUE_KEY 18441376
+#define STATS_KEY 163216
 #define BILLION 1000000000L
 
 /* Struct for resources */
@@ -53,21 +54,25 @@ rcb_t *RCB_array;
 
 /* Global variables for all */
 int memory_size = sizeof(long long unsigned) * 22;
-int time_memory, resource_memory, vector_memory, queue_memory, *resourceVector, *resourceQueue;
+int time_memory, resource_memory, vector_memory, queue_memory, stats_memory, *resourceVector, *resourceQueue;
 long long unsigned *seconds, *nano_seconds, *claim;
+
+typedef struct statsStruct {
+    double cpu_utilization, waiting_time, turnaround_time;
+}stats_t;
+stats_t *myStats;
 
 sem_t *resource_sem;
 
 
 /* Global variables for OSS */
-int throughput;
-int turnaround_time;
-int waiting_time;
-int verbose;
-double cpu_utilization;
+bool verbose;
+
 
 /* Global variables for USER */
-
+//resources[i][0] will be the number of resources currently claimed. resources[i][1] will be the number of resources desired to be claimed.
+int resources[20][2] = {0}; /* Used to keep track of this process' resource claims */
+int processID;
 
 /* Function prototypes for all */
 void detachMemory();
@@ -76,10 +81,10 @@ void segfaultHandler();
 void interruptHandler();
 void signalHandler(int);
 void printQueue(int);
+void setupSharedMemory();
 
 /* Function prototypes for OSS */
 void printHelpMenu();
-void setupSharedMemory();
 void deadlockDetection();
 void setupResourceBlocks();
 

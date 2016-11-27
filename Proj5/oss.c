@@ -8,7 +8,7 @@
 
 #include "Proj5.h"
 static long long unsigned next_creation_time = 0;
-//static int deadLock = 0;
+static int jobs_completed = 0;
 //int allocation[20];
 char *logfile = "logfile.txt";
 
@@ -17,23 +17,29 @@ int main(int argc, const char * argv[]) {
     signal(SIGINT, signalHandler);
     signal(SIGALRM, signalHandler);
     signal(SIGTERM, signalHandler);
-    verbose = 0;
-    int option, index, terminate_chance = 50;
+    verbose = false;
+    int option, index, terminate_chance = 50, runtime = 25;
     
-    while ((option = getopt(argc, (char **)argv, "hvl:t:")) != -1) {
+    while ((option = getopt(argc, (char **)argv, "hvl:t:r:")) != -1) {
         switch (option) {
             case 'h':
                 printHelpMenu();
                 break;
             case 'v':
-                verbose = 1;
+                verbose = true;
                 break;
             case 'l':
                 logfile = optarg;
                 break;
             case 't':
-                if (atoi(argv[3]))
-                    terminate_chance = atoi(argv[3]);
+                if (atoi(optarg))
+                    terminate_chance = atoi(optarg);
+                else
+                    printf("Exptected Integer, found %s instead", optarg);
+                break;
+            case 'r':
+                if (atoi(optarg))
+                    runtime = atoi(optarg);
                 else
                     printf("Exptected Integer, found %s instead", optarg);
                 break;
@@ -64,9 +70,15 @@ int main(int argc, const char * argv[]) {
     
     //MARK: Process creation while loop
     int max_processes = 18, process_count = 0, process_number = 1;
-    char procID[10], process_creation_time[15], logical_run_time[3], term_chance[4]; sprintf(term_chance, "%i", terminate_chance);
+    char procID[10], process_creation_time[15], logical_run_time[3], term_chance[4], verboseEntries[2];
+    sprintf(term_chance, "%i", terminate_chance);
+    if (verbose) {
+        sprintf(verboseEntries, "1");
+    } else {
+        sprintf(verboseEntries, "0");
+    }
     pid_t wpid, pid;
-    int status, runtime = 25;
+    int status;
     srand((unsigned)time(NULL));
     alarm(90);
     while (*seconds < runtime) {
@@ -92,7 +104,7 @@ int main(int argc, const char * argv[]) {
             process_number++;
             pid = fork();
             if (pid == 0) {
-                execl("./user", procID, process_creation_time, logical_run_time, term_chance, (char *)NULL);
+                execl("./user", procID, process_creation_time, logical_run_time, term_chance, verboseEntries, logfile, (char *)NULL);
                 printf("Process didn't exec properly.\n");
                 exit(EXIT_FAILURE);
             }
@@ -100,6 +112,7 @@ int main(int argc, const char * argv[]) {
         
         int processID = waitpid(0, NULL, WNOHANG);
         if (processID > 0) {
+            jobs_completed++;
             process_count--;
         }
     }
@@ -119,7 +132,8 @@ void printHelpMenu() {
     printf("'-h' prints this help menu.\n");
     printf("'-v' turns verbose logfile entries on.\n");
     printf("\"-l fileName\" will assign the argument 'fileName' to the variable 'logfile'.\n");
-    printf("'-t' time will assign the argument in time to the variable t.\n\tThis will be the terminate chance. Default is set to 50%%.\n");
+    printf("\"'-t' time\" will assign the argument in time to the variable t.\n\tThis will be the terminate chance. Default is set to 50%%.\n");
+    printf("\"'-r' runtime\" will change the logical runtime to the number given.\n");
     printf("\n");
 }
 
@@ -143,7 +157,7 @@ void setupSharedMemory() {
     *seconds = 0;
     *nano_seconds = 0;
     
-    /* Create shared memory for the resource control blocks */
+    /* Create shared memory for the resource control blocks. */
     if ((resource_memory = shmget(RESOURCE_KEY, sizeof(rcb_t) * 20,  IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory for the resource control blocks. Exiting program...\n");
         perror("OSS shmget rcb:");
@@ -156,6 +170,21 @@ void setupSharedMemory() {
         exit(1);
     }
     
+    /* Create shared memory for the statistics. */
+    if ((stats_memory = shmget(STATS_KEY, sizeof(stats_t), IPC_CREAT | 0777)) == -1) {
+        printf("OSS failed to create statistics memory. Exiting program...\n");
+        perror("OSS shmget statistics memory:");
+        exit(1);
+    }
+    
+    if ((myStats = shmat(stats_memory, NULL, 0)) == NULL) {
+        printf("OSS failed to attach to statistics memory. Exiting program...\n");
+        perror("OSS shmat statistics memory:");
+        exit(1);
+    }
+    
+    /* Create shared memory for the resource vector */
+    /*
     if ((vector_memory = shmget(VECTOR_KEY, sizeof(int) * 20, IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory for the resource vector. Exiting program...\n");
         perror("OSS shmget vector:");
@@ -167,7 +196,8 @@ void setupSharedMemory() {
         perror("OSS shmat vector memory:");
         exit(1);
     }
-    
+    */
+    /* Set up memory for the resource queues */
     if ((queue_memory = shmget(QUEUE_KEY, sizeof(int) * 360, IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory for the resource queue. Exiting program...\n");
         perror("OSS shmget queue memory:");
@@ -196,7 +226,21 @@ void setupSharedMemory() {
 /* Detach from and release all shared memory */
 //MARK: Detach Memory
 void detachMemory() {
-    printf("Time on deck: %.09f seconds.\n", *seconds + (double)*nano_seconds / BILLION);
+    double current_time = *seconds + (double)*nano_seconds / BILLION;
+//    printf("Time on deck: %.09f seconds.\n", current_time);
+    /* Statistics to print: */
+    printf("\nJobs completed: %i\n", jobs_completed);
+    if (jobs_completed > 0)
+        printf("Throughput: %f jobs/minute.\n", (current_time / jobs_completed) * 60);
+    else
+        printf("No jobs completed.\n");
+    printf("Turnaround time: %f second(s).\n", current_time);
+    printf("Waiting time: %f\n", myStats->turnaround_time / jobs_completed);
+    printf("CPU utilization: %.02f%%\n", 100 - (myStats->cpu_utilization / current_time) * 100);
+    
+    /* Detach and release the memory for the statistics */
+    shmdt(myStats);
+    shmctl(stats_memory, IPC_RMID, NULL);
     
     /* Unlink and close the semaphore. Unlink ONLY happens here, not in child processes. */
     sem_unlink("/mySem");
@@ -207,8 +251,8 @@ void detachMemory() {
     shmctl(resource_memory, IPC_RMID, NULL);
     
     /* Detach and release the memory for the resource vector */
-    shmdt(resourceVector);
-    shmctl(vector_memory, IPC_RMID, NULL);
+//    shmdt(resourceVector);
+//    shmctl(vector_memory, IPC_RMID, NULL);
     
     /* Detach and release the memory for the resource queue */
     shmdt(resourceQueue);
@@ -236,7 +280,7 @@ void signalHandler(int signal_sent) {
             fprintf(stderr, "OSS process %i suffered a segmentation fault. It's dead Jim....\n", getpid());
             break;
         case 14:
-            printf("Time has expired!\n");
+            fprintf(stderr, "Time has expired!\n");
             break;
         case 15:
             fprintf(stderr, "SIGTERM sent\n");
@@ -275,6 +319,7 @@ void deadlockDetection() {
         deadlock_occurred = false;
         for (i = 0; i < 20; i++) {
             available[i] = RCB_array[i].maxResourceCount - claim[i];
+            
             if (available[i] < 0) {
                 deadlockedResources[i] = true;
                 deadlock_occurred = true;
@@ -282,32 +327,28 @@ void deadlockDetection() {
             printQueue(i);
             /* Whenever this number is negative it means that we have processes waiting for resources. */
             printf("available[%i]: %i\n", i, available[i]);
-    //        sleep(1);
         }   /* For loop to determine if a deadlock has occurred. */
         sleep(2);
         /* Write to files if necessary. */
         if (deadlock_occurred) {
-            /* Start killing processes */
-            printf("Deadlock has occurred, taking corrective action...\n");
-            for (i = 0; i < 20; i++) {
-                if (deadlockedResources[i]) {
-                    printf("Killing process %i from resource queue %i\n", resourceQueue[i*20], i);
-                    kill(resourceQueue[i * 20], SIGTERM);
-                    sleep(1);
-                }
-            }
             FILE *file;
             file=fopen(logfile, "a");
             if (file == NULL) {
-                printf("Failed to open file, exiting program.\n");
+                fprintf(stderr, "Failed to open file, exiting program.\n");
                 errno = ENOENT;
                 signalHandler(SIGSEGV);
                 exit(1);
             }
-            fprintf(file, "\n");
-            
-            if (verbose) {
-                printf("Writing more stuff to file because verbose statements are turned on.\n");
+            /* Start killing processes */
+            for (i = 0; i < 20; i++) {
+                /* The process that is  */
+                if (deadlockedResources[i] && resourceQueue[i*20] > 0) {
+                    fprintf(file, "Deadlock has occurred at time %.09f, taking corrective action...\n", *seconds + (double)*nano_seconds / BILLION);
+                    fprintf(file, "Killing process %i from resource queue %i\n", resourceQueue[i*20], i);
+                    kill(resourceQueue[i * 20], SIGTERM);
+                    deadlockedResources[i] = false;
+                    sleep(1);
+                }
             }
             fclose(file);
         }
@@ -336,8 +377,8 @@ void setupResourceBlocks() {
         if (RCB_array[i].isShareable) {
             RCB_array[i].maxResourceCount = 180;
         } else {
-//            RCB_array[i].maxResourceCount = 1 + rand() % 10;
-            RCB_array[i].maxResourceCount = 1;
+            RCB_array[i].maxResourceCount = 1 + rand() % 10;
+//            RCB_array[i].maxResourceCount = 1;
         }
         RCB_array[i].currentResourceCount = RCB_array[i].maxResourceCount;
     }
