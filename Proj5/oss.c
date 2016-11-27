@@ -263,44 +263,55 @@ void deadlockDetection() {
     /* claim - allocation = available */
     /* Need to figure out a way to get the claim from each process. */
     sem_wait(resource_sem);
-    bool deadlockedResources[20] = {false}, deadlock_occurred = false;
+    bool deadlockedResources[20] = {false}, deadlock_occurred;
     /* Run deadlock detection */
     printf("Running deadlock detection...\n");
     int i;
+    //TODO: do-while loop for deadlock detection
     /* Figure out what the total claim is. */
     
     /* Determine what the available resources are. */
-    for (i = 0; i < 20; i++) {
-        available[i] = RCB_array[i].maxResourceCount - claim[i];
-        if (available[i] < 0) {
-            deadlockedResources[i] = true;
-            deadlock_occurred = true;
+    do {
+        deadlock_occurred = false;
+        for (i = 0; i < 20; i++) {
+            available[i] = RCB_array[i].maxResourceCount - claim[i];
+            if (available[i] < 0) {
+                deadlockedResources[i] = true;
+                deadlock_occurred = true;
+            }
+            printQueue(i);
+            /* Whenever this number is negative it means that we have processes waiting for resources. */
+            printf("available[%i]: %i\n", i, available[i]);
+    //        sleep(1);
+        }   /* For loop to determine if a deadlock has occurred. */
+        sleep(2);
+        /* Write to files if necessary. */
+        if (deadlock_occurred) {
+            /* Start killing processes */
+            printf("Deadlock has occurred, taking corrective action...\n");
+            for (i = 0; i < 20; i++) {
+                if (deadlockedResources[i]) {
+                    printf("Killing process %i from resource queue %i\n", resourceQueue[i*20], i);
+                    kill(resourceQueue[i * 20], SIGTERM);
+                    sleep(1);
+                }
+            }
+            FILE *file;
+            file=fopen(logfile, "a");
+            if (file == NULL) {
+                printf("Failed to open file, exiting program.\n");
+                errno = ENOENT;
+                signalHandler(SIGSEGV);
+                exit(1);
+            }
+            fprintf(file, "\n");
+            
+            if (verbose) {
+                printf("Writing more stuff to file because verbose statements are turned on.\n");
+            }
+            fclose(file);
         }
-        printQueue(i);
-        /* Whenever this number is negative it means that we have processes waiting for resources. */
-        printf("available[%i]: %i\n", i, available[i]);
-//        sleep(1);
-    }
-    sleep(2);
-    /* Write to files if necessary. */
-    if (deadlock_occurred) {
-        printf("Deadlock has occurred, taking corrective action...\n");
-        FILE *file;
-        file=fopen(logfile, "a");
-        if (file == NULL) {
-            printf("Failed to open file, exiting program.\n");
-            errno = ENOENT;
-            signalHandler(SIGSEGV);
-            exit(1);
-        }
-        fprintf(file, "\n");
-        
-        if (verbose) {
-            printf("Writing more stuff to file because verbose statements are turned on.\n");
-        }
-        fclose(file);
-    }
-    
+    } while (deadlock_occurred);
     printf("Deadlock detection finished.\n");
     sleep(2);
     sem_post(resource_sem);
@@ -329,8 +340,6 @@ void setupResourceBlocks() {
             RCB_array[i].maxResourceCount = 1;
         }
         RCB_array[i].currentResourceCount = RCB_array[i].maxResourceCount;
-//        allocation[i] = RCB_array[i].currentResourceCount;
-//        printf("Resource %i has %i resource(s).\n", i, RCB_array[i].maxResourceCount);
     }
     printf("And now to continue with your regularly scheduled program\n");
     sleep(2);

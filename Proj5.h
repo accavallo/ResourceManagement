@@ -36,11 +36,11 @@
 #define BILLION 1000000000L
 
 /* Struct for resources */
-typedef struct resourceQueue {
-    struct resourceQueue *parent;
-    struct resourceQueue *child;
-    pid_t pid;
-} rscq_t;
+//typedef struct resourceQueue {
+//    struct resourceQueue *parent;
+//    struct resourceQueue *child;
+//    pid_t pid;
+//} rscq_t;
 
 typedef struct resource_control_block {
     bool isShareable;               /* Will either be true or false */

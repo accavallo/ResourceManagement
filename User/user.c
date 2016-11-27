@@ -7,7 +7,8 @@
 //
 
 #include "Proj5.h"
-int resources[20] = {0}; /* Used to keep track of this process' resource claims */
+//resources[i][0] will be the number of resources currently claimed. resources[i][1] will be the number of resources desired to be claimed.
+int resources[20][2] = {0}; /* Used to keep track of this process' resource claims */
 int processID;
 
 int main(int argc, const char * argv[]) {
@@ -104,7 +105,7 @@ int main(int argc, const char * argv[]) {
             if (amount_to_claim - amount_claimed <= RCB_array[resource_to_claim].currentResourceCount) {
                 hasPendingClaim = false;
                 RCB_array[resource_to_claim].currentResourceCount -= (amount_to_claim - amount_claimed);
-                resources[resource_to_claim] += (amount_to_claim - amount_claimed);
+                resources[resource_to_claim][0] += (amount_to_claim - amount_claimed);
                 claim[resource_to_claim] += (amount_to_claim - amount_claimed);
             }
             sem_post(resource_sem);
@@ -136,7 +137,8 @@ int main(int argc, const char * argv[]) {
                 }
                 /* Claim the resources that are allowed to be claimed. Whether all that it wants or what is left. */
                 RCB_array[resource_to_claim].currentResourceCount -= amount_claimed;    //Subtract what was available.
-                resources[resource_to_claim] = amount_claimed;  //This process keeps track of what it has actually claimed.
+                resources[resource_to_claim][0] = amount_claimed;  //This process keeps track of what it has actually claimed.
+                resources[resource_to_claim][1] = amount_to_claim;
                 claim[resource_to_claim] += amount_to_claim;    //Keep track of how much this process wants to claim.
                 differnt_resources_claimed++;
 //                printf("Process %i: claim[%i] = %llu\tamount_to_claim: %i\tamount_claimed: %i\n", processID, resource_to_claim, claim[resource_to_claim], amount_to_claim, amount_claimed);
@@ -153,9 +155,9 @@ int main(int argc, const char * argv[]) {
                     int i = 0;
                     for (; i < 20; i++) {
                         if (resources[i] > 0) {
-                            RCB_array[i].currentResourceCount += resources[i];
-                            claim[i] -= resources[i];
-                            resources[i] = 0;
+                            RCB_array[i].currentResourceCount += resources[i][0];
+                            claim[i] -= resources[i][1];
+                            resources[i][0] = 0, resources[i][1] = 0;
                             deleteFromQueue(i);
                             break;
                         }
@@ -199,7 +201,7 @@ void detachMemory() {
     /* Need to go through and release all resources at this point as well as delete the process from the queue. */
     int i = 0; //pid_t pid;
     for (; i < 20; i++) {
-        RCB_array[i].currentResourceCount += resources[i];
+        RCB_array[i].currentResourceCount += resources[i][0];
         deleteFromQueue(i);
     }
     
@@ -247,10 +249,10 @@ void addToQueue(int index) {
     }
 }
 
-/* Delete */
+/* Delete this process from the queue */
 void deleteFromQueue(int index) {
     pid_t pid = getpid();
-    
+    claim[index] -= resources[index][1];
     /* Need to go through and delete from a very specific queue. */
     int i = 0;
     for (; i < 18; i++) {
@@ -269,5 +271,4 @@ void deleteFromQueue(int index) {
         } else if (resourceQueue[index * 20 + i] == 0 && i == 17)
             break;
     }
-
 }
