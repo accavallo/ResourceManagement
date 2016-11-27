@@ -73,7 +73,9 @@ int main(int argc, const char * argv[]) {
                     signalHandler(SIGSEGV);
                     exit(1);
                 }
-                fprintf(file, "%i is requesting %i from resource %i.\n", processID, amount_to_claim, resource_to_claim);
+                if (verbose)
+                    fprintf(file, "%i is requesting %i from resource %i.\n", processID, amount_to_claim, resource_to_claim);
+                
                 fclose(file);
                 sleep(1);
                 /* Take the resources requested or up to the amount remaining */
@@ -118,7 +120,9 @@ int main(int argc, const char * argv[]) {
                                 signalHandler(SIGSEGV);
                                 exit(1);
                             }
-                            fprintf(file, "%i releasing resource from %i.\n", processID, i);
+                            if (verbose)
+                                fprintf(file, "%i releasing resource from %i.\n", processID, i);
+                            
                             fclose(file);
                             
                             RCB_array[i].currentResourceCount += resources[i][0];

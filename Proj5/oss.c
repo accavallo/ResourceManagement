@@ -18,9 +18,9 @@ int main(int argc, const char * argv[]) {
     signal(SIGALRM, signalHandler);
     signal(SIGTERM, signalHandler);
     verbose = false;
-    int option, index, terminate_chance = 50, runtime = 25;
+    int option, index, terminate_chance = 50, runtime = 25, alarm_time = 60;
     
-    while ((option = getopt(argc, (char **)argv, "hvl:t:r:")) != -1) {
+    while ((option = getopt(argc, (char **)argv, "hvl:t:r:a:")) != -1) {
         switch (option) {
             case 'h':
                 printHelpMenu();
@@ -43,6 +43,11 @@ int main(int argc, const char * argv[]) {
                 else
                     printf("Exptected Integer, found %s instead", optarg);
                 break;
+            case 'a':
+                if (atoi(optarg))
+                    alarm_time = atoi(optarg);
+                else
+                    printf("Exptected Integer, found %s instead", optarg);
             case '?':
                 if (optopt == 'l')
                     fprintf(stderr, "Option -%c requires an argument.\n", optopt);
@@ -80,7 +85,7 @@ int main(int argc, const char * argv[]) {
     pid_t wpid, pid;
     int status;
     srand((unsigned)time(NULL));
-    alarm(90);
+    alarm(alarm_time);
     while (*seconds < runtime) {
         *nano_seconds += rand() % 10000;
         if (*nano_seconds >= BILLION) {
@@ -344,7 +349,7 @@ void deadlockDetection() {
                 /* The process that is  */
                 if (deadlockedResources[i] && resourceQueue[i*20] > 0) {
                     fprintf(file, "Deadlock has occurred at time %.09f, taking corrective action...\n", *seconds + (double)*nano_seconds / BILLION);
-                    fprintf(file, "Killing process %i from resource queue %i\n", resourceQueue[i*20], i);
+                    fprintf(file, "Killing process %i\n", resourceQueue[i*20]);
                     kill(resourceQueue[i * 20], SIGTERM);
                     deadlockedResources[i] = false;
                     sleep(1);
