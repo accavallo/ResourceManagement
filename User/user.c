@@ -8,6 +8,7 @@
 
 #include "Proj5.h"
 int resources[20] = {0}; /* Used to keep track of this process' resource claims */
+int processID;
 
 int main(int argc, const char * argv[]) {
     signal(SIGINT, signalHandler);
@@ -22,16 +23,17 @@ int main(int argc, const char * argv[]) {
      ***********/
     
     int terminate_chance = atoi(argv[3]);
+    processID = atoi(argv[0]);
     /* Get shared memory for time */
     if((time_memory = shmget(MEMORY_KEY, memory_size, 0777)) == -1) {
-        printf("User %i (process %i) failed to get shared memory. Exiting program...\n", atoi(argv[0]), getpid());
+        printf("User %i (process %i) failed to get shared memory. Exiting program...\n", processID, getpid());
         perror("User shmget time memory:");
         exit(1);
     }
     
     /* Attach to shared memory */
     if ((seconds = shmat(time_memory, NULL, 0)) == (long long unsigned *)-1) {
-        printf("User %i (process %i) failed to attach to shared memory. Exiting program...\n", atoi(argv[0]), getpid());
+        printf("User %i (process %i) failed to attach to shared memory. Exiting program...\n", processID, getpid());
         perror("User shmat time memory:");
         exit(1);
     }
@@ -52,13 +54,13 @@ int main(int argc, const char * argv[]) {
     }
     
     if ((vector_memory = shmget(VECTOR_KEY, sizeof(int) * 20, 0777)) == -1) {
-        printf("User %i failed to create shared memory for the resource vector. Exiting program...\n", atoi(argv[0]));
+        printf("User %i failed to create shared memory for the resource vector. Exiting program...\n", processID);
         perror("User shmget vector:");
         exit(1);
     }
     
     if ((resourceVector = shmat(vector_memory, NULL, 0)) == NULL) {
-        printf("User %i failed to attach to the resource vector. Exiting program...\n", atoi(argv[0]));
+        printf("User %i failed to attach to the resource vector. Exiting program...\n", processID);
         perror("User shmat vector memory:");
         exit(1);
     }
@@ -67,37 +69,37 @@ int main(int argc, const char * argv[]) {
     resource_sem = sem_open("/mySem", 0);
     if (resource_sem == SEM_FAILED) {
         perror("User sem_open");
-        printf("User %i failed to open semaphore. Exiting program...\n", atoi(argv[0]));
+        printf("User %i failed to open semaphore. Exiting program...\n", processID);
         exit(1);
     }
     
     if ((queue_memory = shmget(QUEUE_KEY, sizeof(int) * 360, 0777)) == -1) {
-        printf("User %i failed to create shared memory for the resource queue. Exiting program...\n", atoi(argv[0]));
+        printf("User %i failed to create shared memory for the resource queue. Exiting program...\n", processID);
         perror("User shmget queue memory:");
         exit(1);
     }
     
     if ((resourceQueue = shmat(queue_memory, NULL, 0)) == NULL) {
-        printf("User %i failed to attach to the resource queue. Exiting program...\n", atoi(argv[0]));
+        printf("User %i failed to attach to the resource queue. Exiting program...\n", processID);
         perror("User shmat queue memory:");
         exit(1);
     }
 
-//    printf("Hello, from process %3i at time %.09f!\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION);
+//    printf("Hello, from process %3i at time %.09f!\n", processID, *seconds + (double)*nano_seconds / BILLION);
     
     const double CREATION_TIME = atof(argv[1]);
     srand((unsigned)time(NULL));
     double current_time = *seconds + (double)*nano_seconds / BILLION;
     /* Set the first terminate check for at least 1 second after it has been around */
     double terminate_time = current_time + 1 + (rand() % 250000000) / (double)BILLION;
-    printf("First terminate time check for %i is set to %.09f.\n", atoi(argv[0]), terminate_time + CREATION_TIME);
+    printf("First terminate time check for %i is set to %.09f.\n", processID, terminate_time + CREATION_TIME);
     bool hasPendingClaim = false, continueLoop = true;
     int amount_to_claim = 0, amount_claimed = 0, resource_to_claim = 0, differnt_resources_claimed = 0;
     /* In this loop there needs to be some resource requests. */
     while (continueLoop) {
         if (hasPendingClaim) {
             /* Keep checking the resource for the claim */
-            printf("%i checking on pending claim for resource %i...\n", atoi(argv[0]), resource_to_claim);
+            printf("%i checking on pending claim for resource %i...\n", processID, resource_to_claim);
             sem_wait(resource_sem);
             if (amount_to_claim - amount_claimed <= RCB_array[resource_to_claim].currentResourceCount) {
                 hasPendingClaim = false;
@@ -118,7 +120,7 @@ int main(int argc, const char * argv[]) {
                 } else {
                     amount_to_claim = 1 + (rand() % getpid()) % RCB_array[resource_to_claim].maxResourceCount;
                 }
-                printf("%i is requesting %i from resource %i.\n", atoi(argv[0]), amount_to_claim, resource_to_claim);
+                printf("%i is requesting %i from resource %i.\n", processID, amount_to_claim, resource_to_claim);
                 sleep(1);
                 /* Take the resources requested or up to the amount remaining */
                 if (RCB_array[resource_to_claim].currentResourceCount < amount_to_claim) {
@@ -137,8 +139,8 @@ int main(int argc, const char * argv[]) {
                 resources[resource_to_claim] = amount_claimed;  //This process keeps track of what it has actually claimed.
                 claim[resource_to_claim] += amount_to_claim;    //Keep track of how much this process wants to claim.
                 differnt_resources_claimed++;
-//                printf("Process %i: claim[%i] = %llu\tamount_to_claim: %i\tamount_claimed: %i\n", atoi(argv[0]), resource_to_claim, claim[resource_to_claim], amount_to_claim, amount_claimed);
-//                printf("Process %i: resources[%i]: %i\n", atoi(argv[0]), resource_to_claim, resources[resource_to_claim]);
+//                printf("Process %i: claim[%i] = %llu\tamount_to_claim: %i\tamount_claimed: %i\n", processID, resource_to_claim, claim[resource_to_claim], amount_to_claim, amount_claimed);
+//                printf("Process %i: resources[%i]: %i\n", processID, resource_to_claim, resources[resource_to_claim]);
                 addToQueue(resource_to_claim);
                 sleep(1);
                 sem_post(resource_sem);
@@ -158,7 +160,7 @@ int main(int argc, const char * argv[]) {
                             break;
                         }
                     }
-                    printf("%i releasing resource from %i.\n", atoi(argv[0]), i);
+                    printf("%i releasing resource from %i.\n", processID, i);
                     differnt_resources_claimed--;
                 }
                 
@@ -172,12 +174,12 @@ int main(int argc, const char * argv[]) {
             /* Check if this process will terminate */
             if ((1 + rand() % 100) <= terminate_chance) {
                 continueLoop = false;
-                printf("Releasing memory and resources from %i\n", atoi(argv[0]));
+                printf("Releasing memory and resources from %i\n", processID);
                 /* Send resources back to the plane from whence they came */
             } else {
                 /* Request resources and set up a new time to either terminate or ask for resources */
                 terminate_time = current_time + (rand() % 250000000) / (double)BILLION;
-                printf("%i trudges on... until at least %.09f\n", atoi(argv[0]), terminate_time);
+                printf("%i trudges on... until at least %.09f\n", processID, terminate_time);
             }
             
         } else if (atoi(argv[2]) <= *seconds)
@@ -187,7 +189,7 @@ int main(int argc, const char * argv[]) {
         current_time = *seconds + (double)*nano_seconds / BILLION;
     } /* End while loop */
     
-    printf("Process %i ending at time %.09f. Last check was at %.09f\n", atoi(argv[0]), *seconds + (double)*nano_seconds / BILLION, terminate_time);
+    printf("Process %i ending at time %.09f. Last check was at %.09f\n", processID, *seconds + (double)*nano_seconds / BILLION, terminate_time);
     
     detachMemory();
     return 0;
@@ -253,7 +255,7 @@ void deleteFromQueue(int index) {
     int i = 0;
     for (; i < 18; i++) {
         if (resourceQueue[index * 20 + i] == pid) {
-            printf("Removing %i from queue %i\n", pid, index);
+            printf("Removing %i from queue %i\n", processID, index);
             resourceQueue[index * 20 + i] = 0;
             break;
         }

@@ -263,6 +263,7 @@ void deadlockDetection() {
     /* claim - allocation = available */
     /* Need to figure out a way to get the claim from each process. */
     sem_wait(resource_sem);
+    bool deadlockedResources[20] = {false}, deadlock_occurred = false;
     /* Run deadlock detection */
     printf("Running deadlock detection...\n");
     int i;
@@ -271,28 +272,34 @@ void deadlockDetection() {
     /* Determine what the available resources are. */
     for (i = 0; i < 20; i++) {
         available[i] = RCB_array[i].maxResourceCount - claim[i];
-        
+        if (available[i] < 0) {
+            deadlockedResources[i] = true;
+            deadlock_occurred = true;
+        }
         printQueue(i);
         /* Whenever this number is negative it means that we have processes waiting for resources. */
         printf("available[%i]: %i\n", i, available[i]);
-        sleep(1);
+//        sleep(1);
     }
-    
+    sleep(2);
     /* Write to files if necessary. */
-    FILE *file;
-    file=fopen(logfile, "a");
-    if (file == NULL) {
-        printf("Failed to open file, exiting program.\n");
-        errno = ENOENT;
-        signalHandler(SIGSEGV);
-        exit(1);
+    if (deadlock_occurred) {
+        printf("Deadlock has occurred, taking corrective action...\n");
+        FILE *file;
+        file=fopen(logfile, "a");
+        if (file == NULL) {
+            printf("Failed to open file, exiting program.\n");
+            errno = ENOENT;
+            signalHandler(SIGSEGV);
+            exit(1);
+        }
+        fprintf(file, "\n");
+        
+        if (verbose) {
+            printf("Writing more stuff to file because verbose statements are turned on.\n");
+        }
+        fclose(file);
     }
-    fprintf(file, "\n");
-    
-    if (verbose) {
-        printf("Writing more stuff to file because verbose statements are turned on.\n");
-    }
-    fclose(file);
     
     printf("Deadlock detection finished.\n");
     sleep(2);
@@ -318,7 +325,8 @@ void setupResourceBlocks() {
         if (RCB_array[i].isShareable) {
             RCB_array[i].maxResourceCount = 180;
         } else {
-            RCB_array[i].maxResourceCount = 1 + rand() % 10;
+//            RCB_array[i].maxResourceCount = 1 + rand() % 10;
+            RCB_array[i].maxResourceCount = 1;
         }
         RCB_array[i].currentResourceCount = RCB_array[i].maxResourceCount;
 //        allocation[i] = RCB_array[i].currentResourceCount;
