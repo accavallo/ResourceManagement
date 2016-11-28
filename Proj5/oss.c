@@ -9,7 +9,6 @@
 #include "Proj5.h"
 static long long unsigned next_creation_time = 0;
 static int jobs_completed = 0;
-//int allocation[20];
 char *logfile = "logfile.txt";
 
 int main(int argc, const char * argv[]) {
@@ -64,8 +63,10 @@ int main(int argc, const char * argv[]) {
     for (index = optind; index < argc; index++)
         printf("Non-option argument \"%s\"\n", argv[index]);
     
-    printf("Logfile: %s\n", logfile);
-    printf("Terminate chance: %i%%\n", terminate_chance);
+    printf("Logfile: %s\n", logfile);   //-l
+    printf("Terminate chance: %i%%\n", terminate_chance);   //-t
+    printf("Logical runtime: %i\n", runtime);   //-r
+    printf("Alarm time: %i\n", alarm_time);   //-a
     if (verbose)
         printf("Verbose logfile entries are on.\n");
     sleep(2);
@@ -139,6 +140,7 @@ void printHelpMenu() {
     printf("\"-l fileName\" will assign the argument 'fileName' to the variable 'logfile'.\n");
     printf("\"'-t' time\" will assign the argument in time to the variable t.\n\tThis will be the terminate chance. Default is set to 50%%.\n");
     printf("\"'-r' runtime\" will change the logical runtime to the number given.\n");
+    printf("\"'-a' time\" will assign the argument in time to the variable a.\n\tThis will be the alarm time. Default is set to 60 seconds.\n");
     printf("\n");
 }
 
@@ -188,20 +190,6 @@ void setupSharedMemory() {
         exit(1);
     }
     
-    /* Create shared memory for the resource vector */
-    /*
-    if ((vector_memory = shmget(VECTOR_KEY, sizeof(int) * 20, IPC_CREAT | 0777)) == -1) {
-        printf("OSS failed to create shared memory for the resource vector. Exiting program...\n");
-        perror("OSS shmget vector:");
-        exit(1);
-    }
-    
-    if ((resourceVector = shmat(vector_memory, NULL, 0)) == NULL) {
-        printf("OSS failed to attach to the resource vector. Exiting program...\n");
-        perror("OSS shmat vector memory:");
-        exit(1);
-    }
-    */
     /* Set up memory for the resource queues */
     if ((queue_memory = shmget(QUEUE_KEY, sizeof(int) * 360, IPC_CREAT | 0777)) == -1) {
         printf("OSS failed to create shared memory for the resource queue. Exiting program...\n");
@@ -232,7 +220,6 @@ void setupSharedMemory() {
 //MARK: Detach Memory
 void detachMemory() {
     double current_time = *seconds + (double)*nano_seconds / BILLION;
-//    printf("Time on deck: %.09f seconds.\n", current_time);
     /* Statistics to print: */
     printf("\nJobs completed: %i\n", jobs_completed);
     if (jobs_completed > 0)
@@ -241,7 +228,7 @@ void detachMemory() {
         printf("No jobs completed.\n");
     printf("Turnaround time: %f second(s).\n", current_time);
     printf("Waiting time: %f\n", myStats->turnaround_time / jobs_completed);
-    printf("CPU utilization: %.02f%%\n", 100 - (myStats->cpu_utilization / current_time) * 100);
+    printf("CPU utilization: %.02f%%\n", (current_time / myStats->cpu_utilization) * 100);
     
     /* Detach and release the memory for the statistics */
     shmdt(myStats);
@@ -254,10 +241,6 @@ void detachMemory() {
     /* Detach and release the memory for the resource blocks */
     shmdt(RCB_array);
     shmctl(resource_memory, IPC_RMID, NULL);
-    
-    /* Detach and release the memory for the resource vector */
-//    shmdt(resourceVector);
-//    shmctl(vector_memory, IPC_RMID, NULL);
     
     /* Detach and release the memory for the resource queue */
     shmdt(resourceQueue);
@@ -316,7 +299,6 @@ void deadlockDetection() {
     /* Run deadlock detection */
     printf("Running deadlock detection...\n");
     int i;
-    //TODO: do-while loop for deadlock detection
     /* Figure out what the total claim is. */
     
     /* Determine what the available resources are. */
@@ -328,12 +310,14 @@ void deadlockDetection() {
             if (available[i] < 0) {
                 deadlockedResources[i] = true;
                 deadlock_occurred = true;
-            }
+            } else
+                deadlockedResources[i] = false;
+            
             printQueue(i);
             /* Whenever this number is negative it means that we have processes waiting for resources. */
             printf("available[%i]: %i\n", i, available[i]);
         }   /* For loop to determine if a deadlock has occurred. */
-//        sleep(2);
+        sleep(2);
         /* Write to files if necessary. */
         if (deadlock_occurred) {
             FILE *file;
@@ -345,14 +329,17 @@ void deadlockDetection() {
                 exit(1);
             }
             /* Start killing processes */
+            int status;
             for (i = 0; i < 20; i++) {
-                /* The process that is  */
+                /* The process that is first in the queue will be terminated */
                 if (deadlockedResources[i] && resourceQueue[i*20] > 0) {
                     fprintf(file, "Deadlock has occurred at time %.09f, taking corrective action...\n", *seconds + (double)*nano_seconds / BILLION);
                     fprintf(file, "Killing process %i\n", resourceQueue[i*20]);
                     kill(resourceQueue[i * 20], SIGTERM);
+                    waitpid(resourceQueue[i * 20], &status, 0);
                     deadlockedResources[i] = false;
 //                    sleep(1);
+                    break;
                 }
             }
             fclose(file);
@@ -383,7 +370,6 @@ void setupResourceBlocks() {
             RCB_array[i].maxResourceCount = 180;
         } else {
             RCB_array[i].maxResourceCount = 1 + rand() % 10;
-//            RCB_array[i].maxResourceCount = 1;
         }
         RCB_array[i].currentResourceCount = RCB_array[i].maxResourceCount;
     }
@@ -393,7 +379,7 @@ void setupResourceBlocks() {
 
 //MARK: Print Queue
 void printQueue(int index) {
-    printf("Queue %i\n", index);
+    printf("Queue %i\t", index);
     int i;
     for (i = 0; i < 18; i++) {
         if (resourceQueue[index * 20 + i] == 0)
@@ -401,6 +387,6 @@ void printQueue(int index) {
         else
             printf("%i -> ", resourceQueue[index * 20 + i]);
     }
-    if (i > 0)
+//    if (i > 0)
         printf("\n");
 }

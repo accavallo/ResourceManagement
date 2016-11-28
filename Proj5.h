@@ -22,7 +22,6 @@
 #include <sys/msg.h>        /* For message passing */
 #include <semaphore.h>      /* For semaphore usage */
 #include <stdbool.h>        /* For bool type because C doesn't include it automatically. I really hate this language */
-//#include <sys/sem.h>
 #include <sys/ipc.h>        /* For inter-process communication */
 #include <sys/types.h>      /*  */
 #include <errno.h>          /* To set errno for perror */
@@ -31,30 +30,20 @@
 
 #define MEMORY_KEY 18137644
 #define RESOURCE_KEY 44673181
-//#define VECTOR_KEY 13761844
 #define QUEUE_KEY 18441376
 #define STATS_KEY 163216
 #define BILLION 1000000000L
-
-/* Struct for resources */
-//typedef struct resourceQueue {
-//    struct resourceQueue *parent;
-//    struct resourceQueue *child;
-//    pid_t pid;
-//} rscq_t;
 
 typedef struct resource_control_block {
     bool isShareable;               /* Will either be true or false */
     int maxResourceCount;           /* The total number of resources for requesting purposes */
     int currentResourceCount;       /* The current number of resources */
-//    rscq_t *head;                   /* Shows where resources are allocated */
-//    rscq_t *tail;                   /* Will be used for deadlock. The last resource in the queue will always be the one to go. */
 } rcb_t;
 rcb_t *RCB_array;
 
 /* Global variables for all */
 int memory_size = sizeof(long long unsigned) * 22;
-int time_memory, resource_memory, vector_memory, queue_memory, stats_memory, *resourceVector, *resourceQueue;
+int time_memory, resource_memory, queue_memory, stats_memory, *resourceVector, *resourceQueue;
 long long unsigned *seconds, *nano_seconds, *claim;
 
 typedef struct statsStruct {

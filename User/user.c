@@ -57,7 +57,6 @@ int main(int argc, const char * argv[]) {
             if (rand() % 2) {
                 sem_wait(resource_sem);
                 idle_time = *seconds + (double)*nano_seconds / BILLION;
-//                    perror("user sem_wait");
                 /* Request resource */
                 resource_to_claim = (rand() % getpid()) % 20;
                 if (RCB_array[resource_to_claim].maxResourceCount > 10) {
@@ -77,18 +76,13 @@ int main(int argc, const char * argv[]) {
                     fprintf(file, "%i is requesting %i from resource %i.\n", processID, amount_to_claim, resource_to_claim);
                 
                 fclose(file);
-//                sleep(1);
                 /* Take the resources requested or up to the amount remaining */
                 if (RCB_array[resource_to_claim].currentResourceCount < amount_to_claim) {
                     amount_claimed = RCB_array[resource_to_claim].currentResourceCount;
-//                    RCB_array[resource_to_claim].currentResourceCount -= amount_claimed;
                     hasPendingClaim = true;
                     
                 } else {
                     amount_claimed = amount_to_claim;
-//                    RCB_array[resource_to_claim].currentResourceCount -= amount_to_claim;
-//                    resources[resource_to_claim] = amount_to_claim;
-//                    claim[resource_to_claim] += amount_to_claim;
                 }
                 /* Claim the resources that are allowed to be claimed. Whether all that it wants or what is left. */
                 RCB_array[resource_to_claim].currentResourceCount -= amount_claimed;    //Subtract what was available.
@@ -99,13 +93,10 @@ int main(int argc, const char * argv[]) {
 //                printf("Process %i: claim[%i] = %llu\tamount_to_claim: %i\tamount_claimed: %i\n", processID, resource_to_claim, claim[resource_to_claim], amount_to_claim, amount_claimed);
 //                printf("Process %i: resources[%i]: %i\n", processID, resource_to_claim, resources[resource_to_claim]);
                 addToQueue(resource_to_claim);
-//                myStats->cpu_utilization += (*seconds + (double)*nano_seconds / BILLION - idle_time);
 //                sleep(1);
                 sem_post(resource_sem);
-//                    perror("user sem_post");
             } else {
                 sem_wait(resource_sem);
-//                    perror("user sem_wait");
                 /* Release resource */
                 idle_time = *seconds + (double)*nano_seconds / BILLION;
                 if (different_resources_claimed > 0) {
@@ -134,10 +125,7 @@ int main(int argc, const char * argv[]) {
                     }
                     different_resources_claimed--;
                 }
-//                myStats->cpu_utilization += (*seconds + (double)*nano_seconds / BILLION - idle_time);
-//                sleep(1);
                 sem_post(resource_sem);
-//                    perror("user sem_post");
             }
         } /* End pending claim else statement */
         /*Check between 1 ms and 250 ms to determine if the process will finish, after it has been around for at least one second */
@@ -208,20 +196,6 @@ void setupSharedMemory() {
         perror("User shmat statistics memory:");
         exit(1);
     }
-    
-    /*
-    if ((vector_memory = shmget(VECTOR_KEY, sizeof(int) * 20, 0777)) == -1) {
-        printf("User %i failed to create shared memory for the resource vector. Exiting program...\n", processID);
-        perror("User shmget vector:");
-        exit(1);
-    }
-    
-    if ((resourceVector = shmat(vector_memory, NULL, 0)) == NULL) {
-        printf("User %i failed to attach to the resource vector. Exiting program...\n", processID);
-        perror("User shmat vector memory:");
-        exit(1);
-    }
-     */
     
     /* Open the named semaphore since sem_init() is deprecated... */
     resource_sem = sem_open("/mySem", 0);
